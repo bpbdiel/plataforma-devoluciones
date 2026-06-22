@@ -1,0 +1,211 @@
+{% extends 'returns/base.html' %}
+{% block title %}Devoluciones{% endblock %}
+{% block topbar_title %}Devoluciones{% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'return_create' %}" class="btn btn-primary js-open-return-modal">＋ Nueva devolución</a>
+{% endblock %}
+
+{% block content %}
+
+{% with estado_colors="recibido:blue en_revision:yellow aprobado:green rechazado:red reembolsado:purple cerrado:gray" %}
+{% endwith %}
+
+<!-- Stats -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-value" style="color:var(--text)">{{ stats.total }}</div>
+    <div class="stat-label">Total</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" style="color:var(--accent)">{{ stats.recibido }}</div>
+    <div class="stat-label">Recibidos</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" style="color:var(--yellow)">{{ stats.en_revision }}</div>
+    <div class="stat-label">En revisión</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" style="color:var(--green)">{{ stats.aprobado }}</div>
+    <div class="stat-label">Aprobados</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" style="color:var(--red)">{{ stats.rechazado }}</div>
+    <div class="stat-label">Rechazados</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" style="color:var(--purple)">{{ stats.reembolsado }}</div>
+    <div class="stat-label">Reembolsados</div>
+  </div>
+</div>
+
+<!-- Table -->
+<div class="table-wrap returns-table-wrap">
+  <div class="table-header">
+    <form method="get" class="filter-bar" style="flex:1">
+      <div class="search-wrap">
+        <span class="search-icon">⌕</span>
+        <input type="text" name="q" value="{{ q }}" placeholder="Buscar por orden, seller, SKU, EAN, marca...">
+      </div>
+      <select name="estado" class="form-select" style="width:auto">
+        <option value="">Todos los estados</option>
+        {% for val, label in estado_choices %}
+        <option value="{{ val }}" {% if estado_filter == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn-ghost">Filtrar</button>
+      {% if q or estado_filter %}
+      <a href="{% url 'returns_dashboard' %}" class="btn btn-ghost">✕ Limpiar</a>
+      {% endif %}
+    </form>
+  </div>
+
+  {% if devoluciones %}
+  <table class="returns-table">
+    <colgroup>
+      <col class="col-id">
+      <col class="col-date">
+      <col class="col-order">
+      <col class="col-seller">
+      <col class="col-sku">
+      <col class="col-product">
+      <col class="col-qty">
+      <col class="col-status">
+      <col class="col-product-status">
+      <col class="col-grade">
+      <col class="col-appeal">
+      <col class="col-photos">
+      <col class="col-actions">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Fecha</th>
+        <th>Orden</th>
+        <th>Seller</th>
+        <th>SKU</th>
+        <th>Producto</th>
+        <th>Cant.</th>
+        <th>Estado</th>
+        <th>Estado del producto</th>
+        <th>Grado</th>
+        <th>Apelación</th>
+        <th>Fotos</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in devoluciones %}
+      <tr>
+        <td style="color:var(--text-muted)">{{ d.id }}</td>
+        <td style="color:var(--text-muted)">{{ d.fecha_ingreso|date:"d/m/Y" }}</td>
+        <td><a href="{% url 'return_detail' d.pk %}"><strong>{{ d.numero_orden }}</strong></a></td>
+        <td>{{ d.get_seller_display }}</td>
+        <td>{{ d.sku }}</td>
+        <td>
+          {% if d.producto_nombre %}
+          <div class="table-product-name" title="{{ d.producto_nombre }}">{{ d.producto_nombre }}</div>
+          {% else %}
+          <div style="color:var(--text-muted)">—</div>
+          {% endif %}
+        </td>
+        <td style="color:var(--text-muted)">{{ d.cantidad }}</td>
+        <td>
+          <span class="badge badge-{% if d.estado == 'recibido' %}blue{% elif d.estado == 'en_revision' %}yellow{% elif d.estado == 'aprobado' %}green{% elif d.estado == 'rechazado' %}red{% elif d.estado == 'reembolsado' %}purple{% else %}gray{% endif %}">
+            {{ d.get_estado_display }}
+          </span>
+        </td>
+        <td>
+          <span class="badge badge-{% if d.condicion_producto == 'nuevo' %}green{% elif d.condicion_producto == 'caja_danada' or d.condicion_producto == 'dano_estetico' %}yellow{% else %}red{% endif %}">
+            {{ d.get_condicion_producto_display }}
+          </span>
+        </td>
+        <td>
+          <span class="badge badge-gray">{{ d.grado }}</span>
+        </td>
+        <td>
+          {% with apelacion=d.apelaciones.first %}
+          {% if apelacion %}
+          <a href="{% url 'appeal_detail' apelacion.pk %}" class="badge badge-{{ apelacion.get_status_color }}" title="{{ apelacion.numero_apelacion }}">
+            {{ apelacion.get_status_display }}
+          </a>
+          {% else %}
+          <span class="badge badge-gray">Sin apelación</span>
+          {% endif %}
+          {% endwith %}
+        </td>
+        <td style="color:var(--text-muted)">
+          {% with count=d.fotos.count %}
+          {% if count > 0 %}📷 {{ count }}{% else %}—{% endif %}
+          {% endwith %}
+        </td>
+        <td>
+          <div class="row-actions">
+            <a href="{% url 'return_detail' d.pk %}" class="btn btn-ghost btn-sm btn-icon" title="Ver" aria-label="Ver devolución">
+              <span aria-hidden="true">◉</span>
+            </a>
+            <a href="{% url 'return_edit' d.pk %}" class="btn btn-ghost btn-sm btn-icon" title="Editar" aria-label="Editar devolución">
+              <span aria-hidden="true">✎</span>
+            </a>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% include 'returns/_pagination.html' with page_obj=devoluciones_page page_param='page' querystring=devoluciones_page_query %}
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon">📦</div>
+    <div class="empty-title">No hay devoluciones</div>
+    <div class="empty-sub">{% if q or estado_filter %}No se encontraron resultados con ese filtro.{% else %}Registra la primera devolución usando el botón de arriba.{% endif %}</div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="modal" id="returnModal" aria-hidden="true">
+  <div class="modal-backdrop" data-modal-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="returnModalTitle">
+    <div class="modal-header">
+      <div class="modal-title" id="returnModalTitle">Nueva devolución</div>
+      <button type="button" class="btn btn-ghost modal-close" data-modal-close aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-body">
+      {% url 'return_create' as create_action_url %}
+      {% include 'returns/_return_form.html' with form=create_form formset=create_formset action_url=create_action_url submit_label='✓ Crear devolución' %}
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const modal = document.getElementById('returnModal');
+    const openButtons = document.querySelectorAll('.js-open-return-modal');
+    if (!modal || !openButtons.length) return;
+
+    const firstField = modal.querySelector('.modal-body input, .modal-body select, .modal-body textarea, .modal-body button');
+    const setOpen = (isOpen) => {
+      modal.classList.toggle('is-open', isOpen);
+      modal.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+      document.body.classList.toggle('modal-open', isOpen);
+      if (isOpen && firstField) firstField.focus();
+    };
+
+    openButtons.forEach((button) => {
+      button.addEventListener('click', (event) => {
+        event.preventDefault();
+        setOpen(true);
+      });
+    });
+
+    modal.querySelectorAll('[data-modal-close]').forEach((button) => {
+      button.addEventListener('click', () => setOpen(false));
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && modal.classList.contains('is-open')) {
+        setOpen(false);
+      }
+    });
+  })();
+</script>
+{% endblock %}

@@ -1,0 +1,196 @@
+from django import forms
+from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.models import User
+from django.db.models import Q
+from .models import Appeal, Return, ReturnPhoto
+
+
+class ReturnForm(forms.ModelForm):
+    class Meta:
+        model = Return
+        fields = [
+            'seller',
+            'numero_orden',
+            'sku',
+            'ean',
+            'producto_nombre',
+            'marca',
+            'categoria',
+            'precio_venta',
+            'cantidad',
+            'condicion_producto',
+            'grado',
+            'detalles_dano',
+        ]
+        widgets = {
+            'seller': forms.Select(attrs={'class': 'form-select'}),
+            'numero_orden': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Ej: ORD-2024-001'}),
+            'sku': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Ej: SKU-12345'}),
+            'ean': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Ej: 7800000000000'}),
+            'producto_nombre': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Nombre del producto'}),
+            'marca': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Marca'}),
+            'categoria': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Categoría'}),
+            'precio_venta': forms.NumberInput(attrs={'class': 'form-input', 'placeholder': '0.00', 'min': '0', 'step': '0.01'}),
+            'cantidad': forms.NumberInput(attrs={'class': 'form-input', 'min': '1', 'step': '1'}),
+            'condicion_producto': forms.Select(attrs={'class': 'form-select'}),
+            'grado': forms.Select(attrs={'class': 'form-select'}),
+            'detalles_dano': forms.Textarea(attrs={'class': 'form-textarea', 'rows': 4, 'placeholder': 'Describe el daño o motivo de devolución...'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        condicion = self.data.get(self.add_prefix('condicion_producto')) if self.is_bound else self.initial.get('condicion_producto')
+        if not condicion and self.instance and self.instance.pk:
+            condicion = self.instance.condicion_producto
+        grado = Return.grado_for_condicion(condicion or 'nuevo')
+        self.fields['grado'].initial = grado
+        self.fields['grado'].disabled = True
+        self.fields['grado'].widget.attrs['data-grado-producto'] = ''
+
+    def save(self, commit=True):
+        is_new = self.instance.pk is None
+        instance = super().save(commit=False)
+        if is_new:
+            instance.estado = 'recibido'
+        instance.grado = Return.grado_for_condicion(instance.condicion_producto)
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance
+
+
+class PlatformUserCreationForm(UserCreationForm):
+    first_name = forms.CharField(
+        label='Nombre',
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Nombre'}),
+    )
+    last_name = forms.CharField(
+        label='Apellido',
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Apellido'}),
+    )
+    email = forms.EmailField(
+        label='Email',
+        required=False,
+        widget=forms.EmailInput(attrs={'class': 'form-input', 'placeholder': 'correo@empresa.cl'}),
+    )
+    is_staff = forms.BooleanField(
+        label='Usuario administrador',
+        required=False,
+        help_text='Permite crear usuarios y acceder al panel de administración de plataforma.',
+    )
+
+    class Meta:
+        model = User
+        fields = ['username', 'first_name', 'last_name', 'email', 'password1', 'password2', 'is_staff']
+        widgets = {
+            'username': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Usuario'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['password1'].widget.attrs.update({'class': 'form-input', 'placeholder': 'Contraseña'})
+        self.fields['password2'].widget.attrs.update({'class': 'form-input', 'placeholder': 'Confirmar contraseña'})
+
+
+class PlatformUserUpdateForm(forms.ModelForm):
+    is_staff = forms.BooleanField(
+        label='Usuario administrador',
+        required=False,
+    )
+    is_active = forms.BooleanField(
+        label='Usuario activo',
+        required=False,
+    )
+
+    class Meta:
+        model = User
+        fields = ['username', 'first_name', 'last_name', 'email', 'is_staff', 'is_active']
+        widgets = {
+            'username': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Usuario'}),
+            'first_name': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Nombre'}),
+            'last_name': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Apellido'}),
+            'email': forms.EmailInput(attrs={'class': 'form-input', 'placeholder': 'correo@empresa.cl'}),
+        }
+
+
+class ReturnPhotoForm(forms.ModelForm):
+    class Meta:
+        model = ReturnPhoto
+        fields = ['foto', 'descripcion']
+        widgets = {
+            'descripcion': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Descripción breve (opcional)'}),
+            'foto': forms.FileInput(attrs={'class': 'form-file', 'accept': 'image/*'}),
+        }
+
+
+ReturnPhotoFormSet = forms.inlineformset_factory(
+    Return, ReturnPhoto,
+    form=ReturnPhotoForm,
+    extra=3,
+    can_delete=True,
+    max_num=10,
+)
+
+
+class AppealForm(forms.ModelForm):
+    devolucion = forms.ModelChoiceField(
+        label='Devolución',
+        queryset=Return.objects.none(),
+        empty_label='Selecciona una devolución sin apelación',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    class Meta:
+        model = Appeal
+        fields = [
+            'devolucion',
+            'numero_apelacion',
+            'detalle',
+            'status',
+            'estado_cuenta',
+        ]
+        widgets = {
+            'numero_apelacion': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'N° de apelación o ticket'}),
+            'detalle': forms.Textarea(attrs={'class': 'form-textarea', 'rows': 5, 'placeholder': 'Detalle del seguimiento de la apelación...'}),
+            'status': forms.Select(attrs={'class': 'form-select'}),
+            'estado_cuenta': forms.NumberInput(attrs={'class': 'form-input', 'placeholder': 'Monto en $ CLP', 'min': '0', 'step': '1'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        devoluciones_disponibles = Return.objects.filter(apelaciones__isnull=True)
+        if self.instance and self.instance.pk:
+            devoluciones_disponibles = Return.objects.filter(
+                Q(apelaciones__isnull=True) | Q(pk=self.instance.devolucion_id)
+            ).distinct()
+            self.fields['devolucion'].initial = self.instance.devolucion
+        else:
+            self.fields['status'].choices = [('en_proceso', 'En proceso')]
+            self.fields['status'].initial = 'en_proceso'
+            self.fields['status'].disabled = True
+        self.fields['devolucion'].queryset = devoluciones_disponibles.order_by('-fecha_ingreso', '-id')
+        self.fields['devolucion'].label_from_instance = self.label_devolucion
+
+    @staticmethod
+    def label_devolucion(devolucion):
+        producto = devolucion.producto_nombre or 'Sin nombre'
+        return f'{devolucion.numero_orden} - {devolucion.sku} - {producto}'
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if instance.pk is None:
+            instance.status = 'en_proceso'
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance
+
+    def clean_estado_cuenta(self):
+        estado_cuenta = self.cleaned_data.get('estado_cuenta', '').strip()
+        if not estado_cuenta:
+            return ''
+        if not estado_cuenta.isdigit():
+            raise forms.ValidationError('Ingresa un monto válido en pesos chilenos.')
+        return estado_cuenta

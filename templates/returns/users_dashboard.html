@@ -1,0 +1,151 @@
+{% extends 'returns/base.html' %}
+{% block title %}Usuarios{% endblock %}
+{% block topbar_title %}Usuarios{% endblock %}
+
+{% block content %}
+<form method="post" class="form-card" style="margin-bottom:18px">
+  {% csrf_token %}
+  <div class="form-section-title">Crear usuario</div>
+  <div class="form-grid cols-3">
+    <div class="form-group">
+      <label class="form-label" for="{{ form.username.id_for_label }}">Usuario *</label>
+      {{ form.username }}
+      {% if form.username.errors %}<div class="form-error">{{ form.username.errors.0 }}</div>{% endif %}
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="{{ form.first_name.id_for_label }}">Nombre</label>
+      {{ form.first_name }}
+      {% if form.first_name.errors %}<div class="form-error">{{ form.first_name.errors.0 }}</div>{% endif %}
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="{{ form.last_name.id_for_label }}">Apellido</label>
+      {{ form.last_name }}
+      {% if form.last_name.errors %}<div class="form-error">{{ form.last_name.errors.0 }}</div>{% endif %}
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="{{ form.email.id_for_label }}">Email</label>
+      {{ form.email }}
+      {% if form.email.errors %}<div class="form-error">{{ form.email.errors.0 }}</div>{% endif %}
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="{{ form.password1.id_for_label }}">Contraseña *</label>
+      {{ form.password1 }}
+      {% if form.password1.errors %}<div class="form-error">{{ form.password1.errors.0 }}</div>{% endif %}
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="{{ form.password2.id_for_label }}">Confirmar contraseña *</label>
+      {{ form.password2 }}
+      {% if form.password2.errors %}<div class="form-error">{{ form.password2.errors.0 }}</div>{% endif %}
+    </div>
+  </div>
+  <div style="margin-top:14px">
+    <label class="checkbox-label">
+      {{ form.is_staff }}
+      <span>Usuario administrador</span>
+    </label>
+    {% if form.is_staff.errors %}<div class="form-error">{{ form.is_staff.errors.0 }}</div>{% endif %}
+  </div>
+  {% if form.non_field_errors %}<div class="form-error" style="margin-top:12px">{{ form.non_field_errors.0 }}</div>{% endif %}
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary">Crear usuario</button>
+  </div>
+</form>
+
+<div class="table-wrap returns-table-wrap">
+  <div class="table-header">
+    <form method="get" class="filter-bar" style="flex:1">
+      <div class="search-wrap">
+        <span class="search-icon">⌕</span>
+        <input type="text" name="q" value="{{ q }}" placeholder="Buscar usuario, nombre o email...">
+      </div>
+      <button type="submit" class="btn btn-ghost">Filtrar</button>
+      {% if q %}
+      <a href="{% url 'users_dashboard' %}" class="btn btn-ghost">✕ Limpiar</a>
+      {% endif %}
+    </form>
+  </div>
+
+  {% if usuarios %}
+  <table class="returns-table">
+    <colgroup>
+      <col class="col-id">
+      <col class="col-order">
+      <col class="col-product">
+      <col class="col-product">
+      <col class="col-status">
+      <col class="col-status">
+      <col class="col-date">
+      <col class="col-actions">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Usuario</th>
+        <th>Nombre</th>
+        <th>Email</th>
+        <th>Rol</th>
+        <th>Estado</th>
+        <th>Creado</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for usuario in usuarios %}
+      <tr>
+        <td style="color:var(--text-muted)">{{ usuario.id }}</td>
+        <td><strong>{{ usuario.username }}</strong></td>
+        <td>
+          {% if usuario.get_full_name %}
+          <div class="table-product-name" title="{{ usuario.get_full_name }}">{{ usuario.get_full_name }}</div>
+          {% else %}
+          <span style="color:var(--text-muted)">—</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if usuario.email %}
+          <div class="table-product-name" title="{{ usuario.email }}">{{ usuario.email }}</div>
+          {% else %}
+          <span style="color:var(--text-muted)">—</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if usuario.is_staff %}
+          <span class="badge badge-purple">Admin</span>
+          {% else %}
+          <span class="badge badge-gray">Usuario</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if usuario.is_active %}
+          <span class="badge badge-green">Activo</span>
+          {% else %}
+          <span class="badge badge-red">Inactivo</span>
+          {% endif %}
+        </td>
+        <td style="color:var(--text-muted)">{{ usuario.date_joined|date:"d/m/Y" }}</td>
+        <td>
+          <div class="row-actions">
+            <a href="{% url 'user_edit' usuario.pk %}" class="btn btn-ghost btn-sm btn-icon" title="Editar" aria-label="Editar usuario">
+              <span aria-hidden="true">✎</span>
+            </a>
+            {% if usuario.pk != request.user.pk %}
+            <a href="{% url 'user_delete' usuario.pk %}" class="btn btn-danger btn-sm btn-icon" title="Eliminar" aria-label="Eliminar usuario">
+              <span aria-hidden="true">×</span>
+            </a>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% include 'returns/_pagination.html' with page_obj=usuarios_page page_param='page' querystring=usuarios_page_query %}
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon">◎</div>
+    <div class="empty-title">No hay usuarios</div>
+    <div class="empty-sub">Crea el primer usuario desde el formulario superior.</div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

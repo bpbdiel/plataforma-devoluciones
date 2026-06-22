@@ -1,0 +1,157 @@
+{% extends 'returns/base.html' %}
+{% block title %}Reporte{% endblock %}
+{% block topbar_title %}Reporte{% endblock %}
+
+{% block content %}
+<div class="table-wrap" style="margin-bottom:18px">
+  <div class="table-header">
+    <form method="get" class="filter-bar" style="flex:1">
+      <div class="search-wrap">
+        <span class="search-icon">⌕</span>
+        <input type="text" name="q" value="{{ q }}" placeholder="Buscar orden, ticket, SKU, producto, marca...">
+      </div>
+      <input type="date" name="fecha_desde" value="{{ fecha_desde }}" class="form-input" style="width:auto" title="Desde">
+      <input type="date" name="fecha_hasta" value="{{ fecha_hasta }}" class="form-input" style="width:auto" title="Hasta">
+      <select name="seller" class="form-select" style="width:auto">
+        <option value="">Todos los sellers</option>
+        {% for val, label in seller_choices %}
+        <option value="{{ val }}" {% if seller_filter == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <select name="estado" class="form-select" style="width:auto">
+        <option value="">Estados devolución</option>
+        {% for val, label in estado_choices %}
+        <option value="{{ val }}" {% if estado_filter == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <select name="condicion" class="form-select" style="width:auto">
+        <option value="">Estados producto</option>
+        {% for val, label in condicion_choices %}
+        <option value="{{ val }}" {% if condicion_filter == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <select name="grado" class="form-select" style="width:auto">
+        <option value="">Todos los grados</option>
+        {% for val, label in grado_choices %}
+        <option value="{{ val }}" {% if grado_filter == val %}selected{% endif %}>Grado {{ label }}</option>
+        {% endfor %}
+      </select>
+      <select name="apelacion" class="form-select" style="width:auto">
+        <option value="">Con o sin apelación</option>
+        <option value="con" {% if apelacion_filter == 'con' %}selected{% endif %}>Con apelación</option>
+        <option value="sin" {% if apelacion_filter == 'sin' %}selected{% endif %}>Sin apelación</option>
+      </select>
+      <select name="appeal_status" class="form-select" style="width:auto">
+        <option value="">Status apelación</option>
+        {% for val, label in appeal_status_choices %}
+        <option value="{{ val }}" {% if appeal_status_filter == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn-ghost">Filtrar</button>
+      <button type="submit" name="export" value="xlsx" class="btn btn-primary">Exportar Excel</button>
+      {% if q or fecha_desde or fecha_hasta or seller_filter or estado_filter or condicion_filter or grado_filter or apelacion_filter or appeal_status_filter %}
+      <a href="{% url 'report_dashboard' %}" class="btn btn-ghost">✕ Limpiar</a>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-value" style="color:var(--text)">{{ total_filtrado }}</div>
+    <div class="stat-label">Registros filtrados</div>
+  </div>
+</div>
+
+<div class="table-wrap returns-table-wrap">
+  <div class="table-header">
+    <div class="form-section-title" style="margin:0;padding:0;border:0">Vista previa del reporte</div>
+  </div>
+
+  {% if devoluciones %}
+  <table class="returns-table">
+    <colgroup>
+      <col class="col-id">
+      <col class="col-date">
+      <col class="col-order">
+      <col class="col-seller">
+      <col class="col-sku">
+      <col class="col-product">
+      <col class="col-status">
+      <col class="col-product-status">
+      <col class="col-grade">
+      <col class="col-appeal">
+      <col class="col-product-status">
+      <col class="col-photos">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Fecha</th>
+        <th>Orden</th>
+        <th>Seller</th>
+        <th>SKU</th>
+        <th>Producto</th>
+        <th>Estado</th>
+        <th>Estado producto</th>
+        <th>Grado</th>
+        <th>Apelación</th>
+        <th>Status apelación</th>
+        <th>Fotos</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in devoluciones %}
+      <tr>
+        <td style="color:var(--text-muted)">{{ d.id }}</td>
+        <td style="color:var(--text-muted)">{{ d.fecha_ingreso|date:"d/m/Y" }}</td>
+        <td><a href="{% url 'return_detail' d.pk %}"><strong>{{ d.numero_orden }}</strong></a></td>
+        <td>{{ d.get_seller_display }}</td>
+        <td>{{ d.sku }}</td>
+        <td>
+          {% if d.producto_nombre %}
+          <div class="table-product-name" title="{{ d.producto_nombre }}">{{ d.producto_nombre }}</div>
+          {% else %}
+          <div style="color:var(--text-muted)">—</div>
+          {% endif %}
+        </td>
+        <td><span class="badge badge-{{ d.get_estado_color }}">{{ d.get_estado_display }}</span></td>
+        <td>
+          <span class="badge badge-{% if d.condicion_producto == 'nuevo' %}green{% elif d.condicion_producto == 'caja_danada' or d.condicion_producto == 'dano_estetico' %}yellow{% else %}red{% endif %}">
+            {{ d.get_condicion_producto_display }}
+          </span>
+        </td>
+        <td><span class="badge badge-gray">{{ d.grado }}</span></td>
+        <td>
+          {% with apelacion=d.apelaciones.first %}
+          {% if apelacion %}
+          <a href="{% url 'appeal_detail' apelacion.pk %}" class="badge badge-{{ apelacion.get_status_color }}">{{ apelacion.numero_apelacion }}</a>
+          {% else %}
+          <span class="badge badge-gray">Sin apelación</span>
+          {% endif %}
+          {% endwith %}
+        </td>
+        <td>
+          {% with apelacion=d.apelaciones.first %}
+          {% if apelacion %}
+          <span class="badge badge-{{ apelacion.get_status_color }}">{{ apelacion.get_status_display }}</span>
+          {% else %}
+          <span style="color:var(--text-muted)">—</span>
+          {% endif %}
+          {% endwith %}
+        </td>
+        <td style="color:var(--text-muted)">{{ d.fotos.count }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% include 'returns/_pagination.html' with page_obj=devoluciones_page page_param='page' querystring=devoluciones_page_query %}
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon">▤</div>
+    <div class="empty-title">No hay datos para el reporte</div>
+    <div class="empty-sub">Ajusta los filtros o limpia la búsqueda para ver resultados.</div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

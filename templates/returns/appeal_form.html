@@ -1,0 +1,16 @@
+{% extends 'returns/base.html' %}
+{% block title %}{{ action }} Apelación{% endblock %}
+{% block topbar_title %}{{ action }} apelación{% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'appeals_dashboard' %}" class="btn btn-ghost">← Volver</a>
+{% endblock %}
+
+{% block content %}
+{% if action == 'Editar' %}
+  {% url 'appeal_edit' apelacion.pk as form_action_url %}
+{% else %}
+  {% url 'appeal_create' as form_action_url %}
+{% endif %}
+{% url 'appeals_dashboard' as cancel_href %}
+{% include 'returns/_appeal_form.html' with form=form action_url=form_action_url cancel_href=cancel_href %}
+{% endblock %}

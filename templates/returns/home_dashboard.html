@@ -1,0 +1,63 @@
+{% extends 'returns/base.html' %}
+{% block title %}Dashboard{% endblock %}
+{% block topbar_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard-grid">
+  <section class="chart-card">
+    <div class="chart-card-header">
+      <div class="chart-title">Devoluciones por grado</div>
+      <div class="chart-total">{{ total_devoluciones }} total</div>
+    </div>
+    <div class="donut-layout">
+      <div class="donut-chart" style="background: conic-gradient({{ grade_donut_gradient }});">
+        <div class="donut-hole">
+          <div>
+            <div class="donut-total">{{ total_devoluciones }}</div>
+            <div class="donut-label">devoluciones</div>
+          </div>
+        </div>
+      </div>
+      <div class="legend-list">
+        {% for item in grado_chart %}
+        <div class="legend-row">
+          <span class="legend-dot grade-{{ item.value|lower }}"></span>
+          <span>Grado {{ item.label }}</span>
+          <span class="legend-value">{{ item.count }} · {{ item.percent }}%</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <section class="chart-card">
+    <div class="chart-card-header">
+      <div class="chart-title">Apelaciones por estado</div>
+      <div class="chart-total">{{ total_apelaciones }} total</div>
+    </div>
+    <div class="donut-layout">
+      <div class="donut-chart" style="background: conic-gradient({{ appeal_donut_gradient }});">
+        <div class="donut-hole">
+          <div>
+            <div class="donut-total">{{ total_apelaciones }}</div>
+            <div class="donut-label">apelaciones</div>
+          </div>
+        </div>
+      </div>
+      <div class="legend-list">
+        {% for item in appeal_chart %}
+        <div class="legend-row">
+          <span class="legend-dot status-{{ item.value }}"></span>
+          <span>{{ item.label }}</span>
+          <span class="legend-value">{{ item.count }} · {{ item.percent }}%</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="chart-summary-row">
+      <span>Total pagado</span>
+      <strong>{{ total_pagado_apelaciones_display }}</strong>
+    </div>
+  </section>
+</div>
+{% endblock %}

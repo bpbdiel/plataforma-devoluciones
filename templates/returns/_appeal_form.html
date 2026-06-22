@@ -1,0 +1,50 @@
+<form method="post" action="{{ action_url }}" class="form-card">
+  {% csrf_token %}
+  <div class="form-section-title">Seguimiento de apelación</div>
+  <div class="form-grid">
+    <div class="form-group">
+      <label>Devolución sin apelación *</label>
+      {% if show_picker %}
+      <div class="input-action appeal-order-picker">
+        <input type="text" class="form-input" data-order-search autocomplete="off" placeholder="Digita el número de orden">
+        <span style="display:none">{{ form.devolucion }}</span>
+        <button type="button" class="btn btn-ghost" data-open-devolucion-picker>Seleccionar</button>
+      </div>
+      <div class="order-suggestions" data-order-suggestions></div>
+      <div class="scan-status" data-selected-devolucion>Selecciona una devolución sin apelación.</div>
+      {% else %}
+      {{ form.devolucion }}
+      {% endif %}
+      {% if form.devolucion.errors %}<div class="form-error">{{ form.devolucion.errors.0 }}</div>{% endif %}
+    </div>
+    <div class="form-group">
+      <label>N° de apelación o ticket *</label>
+      {{ form.numero_apelacion }}
+      {% if form.numero_apelacion.errors %}<div class="form-error">{{ form.numero_apelacion.errors.0 }}</div>{% endif %}
+    </div>
+    <div class="form-group">
+      <label>Status</label>
+      {{ form.status }}
+      <div class="scan-status">Al crear queda en proceso. Luego puedes marcar rechazo, proceso de pago o pagado.</div>
+      {% if form.status.errors %}<div class="form-error">{{ form.status.errors.0 }}</div>{% endif %}
+    </div>
+    <div class="form-group">
+      <label>Monto apelación ($ CLP)</label>
+      {{ form.estado_cuenta }}
+      {% if form.estado_cuenta.errors %}<div class="form-error">{{ form.estado_cuenta.errors.0 }}</div>{% endif %}
+    </div>
+  </div>
+  <div class="form-group" style="margin-top:14px">
+    <label>Detalle *</label>
+    {{ form.detalle }}
+    {% if form.detalle.errors %}<div class="form-error">{{ form.detalle.errors.0 }}</div>{% endif %}
+  </div>
+  <div class="action-row" style="margin-top:18px">
+    {% if cancel_href %}
+    <a href="{{ cancel_href }}" class="btn btn-ghost">Cancelar</a>
+    {% else %}
+    <button type="button" class="btn btn-ghost" data-modal-close>Cancelar</button>
+    {% endif %}
+    <button type="submit" class="btn btn-primary">Guardar</button>
+  </div>
+</form>

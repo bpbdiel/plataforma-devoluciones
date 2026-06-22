@@ -1,0 +1,164 @@
+{% extends 'returns/base.html' %}
+{% block title %}Devolución #{{ devolucion.id }}{% endblock %}
+{% block topbar_title %}Devolución #{{ devolucion.id }}{% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'return_edit' devolucion.pk %}" class="btn btn-ghost">✏ Editar</a>
+  <a href="{% url 'return_delete' devolucion.pk %}" class="btn btn-danger btn-sm">🗑 Eliminar</a>
+  <a href="{% url 'returns_dashboard' %}" class="btn btn-ghost">← Volver</a>
+{% endblock %}
+
+{% block content %}
+<div class="detail-grid">
+  <!-- Left column -->
+  <div>
+    <!-- Estado badge -->
+    <div class="detail-status">
+      <span class="badge badge-{% if devolucion.estado == 'recibido' %}blue{% elif devolucion.estado == 'en_revision' %}yellow{% elif devolucion.estado == 'aprobado' %}green{% elif devolucion.estado == 'rechazado' %}red{% elif devolucion.estado == 'reembolsado' %}purple{% else %}gray{% endif %}" style="font-size:13px;padding:5px 14px">
+        {{ devolucion.get_estado_display }}
+      </span>
+      <span style="color:var(--text-muted);font-size:13px">{{ devolucion.get_condicion_producto_display }}</span>
+      <span style="color:var(--text-muted);font-size:13px">{{ devolucion.get_grado_display }}</span>
+    </div>
+
+    <!-- Main info -->
+    <div class="detail-card">
+      <div class="detail-card-title">Información de la orden</div>
+      <div class="detail-row">
+        <span class="detail-key">Número de orden</span>
+        <span class="detail-val">{{ devolucion.numero_orden }}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-key">Seller</span>
+        <span class="detail-val">{{ devolucion.get_seller_display }}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-key">SKU</span>
+        <span class="detail-val" style="font-family:monospace;font-size:12px">{{ devolucion.sku }}</span>
+      </div>
+      {% if devolucion.ean %}
+      <div class="detail-row">
+        <span class="detail-key">EAN</span>
+        <span class="detail-val" style="font-family:monospace;font-size:12px">{{ devolucion.ean }}</span>
+      </div>
+      {% endif %}
+      {% if devolucion.producto_nombre %}
+      <div class="detail-row">
+        <span class="detail-key">Nombre</span>
+        <span class="detail-val">{{ devolucion.producto_nombre }}</span>
+      </div>
+      {% endif %}
+      {% if devolucion.marca %}
+      <div class="detail-row">
+        <span class="detail-key">Marca</span>
+        <span class="detail-val">{{ devolucion.marca }}</span>
+      </div>
+      {% endif %}
+      {% if devolucion.categoria %}
+      <div class="detail-row">
+        <span class="detail-key">Categoría</span>
+        <span class="detail-val">{{ devolucion.categoria }}</span>
+      </div>
+      {% endif %}
+      {% if devolucion.precio_venta != None %}
+      <div class="detail-row">
+        <span class="detail-key">Precio de venta</span>
+        <span class="detail-val">${{ devolucion.precio_venta }}</span>
+      </div>
+      {% endif %}
+      <div class="detail-row">
+        <span class="detail-key">Cantidad</span>
+        <span class="detail-val">{{ devolucion.cantidad }}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-key">Fecha de ingreso</span>
+        <span class="detail-val">{{ devolucion.fecha_ingreso|date:"d/m/Y" }}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-key">Última actualización</span>
+        <span class="detail-val">{{ devolucion.fecha_actualizacion|date:"d/m/Y H:i" }}</span>
+      </div>
+      {% if devolucion.creado_por %}
+      <div class="detail-row">
+        <span class="detail-key">Registrado por</span>
+        <span class="detail-val">{{ devolucion.creado_por.username }}</span>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Damage details -->
+    {% if devolucion.detalles_dano %}
+    <div class="detail-card">
+      <div class="detail-card-title">Detalles del daño</div>
+      <p style="font-size:13.5px;color:var(--text-dim);line-height:1.7">{{ devolucion.detalles_dano|linebreaksbr }}</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Right column: Photos -->
+  <div>
+    <div class="detail-card">
+      <div class="detail-card-title">Apelación</div>
+      {% with apelacion=devolucion.apelaciones.first %}
+      {% if apelacion %}
+      <div class="detail-row">
+        <span class="detail-key">Estado</span>
+        <span class="detail-val">
+          <span class="badge badge-{{ apelacion.get_status_color }}">{{ apelacion.get_status_display }}</span>
+        </span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-key">Ticket</span>
+        <span class="detail-val">{{ apelacion.numero_apelacion }}</span>
+      </div>
+      {% if apelacion.estado_cuenta %}
+      <div class="detail-row">
+        <span class="detail-key">Monto apelación</span>
+        <span class="detail-val">${{ apelacion.estado_cuenta }} CLP</span>
+      </div>
+      {% endif %}
+      <div style="margin-top:12px">
+        <a href="{% url 'appeal_detail' apelacion.pk %}" class="btn btn-ghost btn-sm">Ver apelación</a>
+      </div>
+      {% else %}
+      <div style="text-align:center;padding:18px;color:var(--text-muted);font-size:13px">
+        Sin apelación asociada
+      </div>
+      <a href="{% url 'appeal_create' %}?devolucion={{ devolucion.pk }}" class="btn btn-ghost btn-sm" style="width:100%;justify-content:center">Crear apelación</a>
+      {% endif %}
+      {% endwith %}
+    </div>
+
+    <div class="detail-card">
+      <div class="detail-card-title">Fotos ({{ devolucion.fotos.count }})</div>
+      {% if devolucion.fotos.exists %}
+      <div class="photos-grid">
+        {% for foto in devolucion.fotos.all %}
+        <div class="photo-item">
+          <a href="{{ foto.foto.url }}" target="_blank">
+            <img src="{{ foto.foto.url }}" alt="Foto {{ forloop.counter }}">
+          </a>
+          {% if foto.descripcion %}
+          <div class="photo-caption">{{ foto.descripcion }}</div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">
+        <div style="font-size:28px;margin-bottom:8px;opacity:.4">📷</div>
+        Sin fotos adjuntas
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Quick actions -->
+    <div class="detail-card">
+      <div class="detail-card-title">Acciones rápidas</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <a href="{% url 'return_edit' devolucion.pk %}" class="btn btn-ghost" style="justify-content:center">✏ Editar devolución</a>
+        <a href="{% url 'return_delete' devolucion.pk %}" class="btn btn-danger" style="justify-content:center">🗑 Eliminar</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

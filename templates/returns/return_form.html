@@ -1,0 +1,17 @@
+{% extends 'returns/base.html' %}
+{% block title %}{{ action }} Devolución{% endblock %}
+{% block topbar_title %}{{ action }} devolución{% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'returns_dashboard' %}" class="btn btn-ghost">← Volver</a>
+{% endblock %}
+
+{% block content %}
+{% url 'returns_dashboard' as dashboard_url %}
+{% if action == 'Editar' %}
+  {% url 'return_edit' devolucion.pk as form_action_url %}
+  {% include 'returns/_return_form.html' with form=form formset=formset action_url=form_action_url submit_label='💾 Guardar cambios' cancel_href=dashboard_url %}
+{% else %}
+  {% url 'return_create' as form_action_url %}
+  {% include 'returns/_return_form.html' with form=form formset=formset action_url=form_action_url submit_label='✓ Crear devolución' cancel_href=dashboard_url %}
+{% endif %}
+{% endblock %}

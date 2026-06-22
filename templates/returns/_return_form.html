@@ -1,0 +1,232 @@
+<form method="post" enctype="multipart/form-data" action="{{ action_url }}" data-product-lookup-url="{% url 'product_lookup_by_ean' %}">
+  {% csrf_token %}
+
+  <!-- Datos principales -->
+  <div class="form-card">
+    <div class="form-section-title">Datos de la orden</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Seller *</label>
+        {{ form.seller }}
+        {% if form.seller.errors %}<div class="form-error">{{ form.seller.errors.0 }}</div>{% endif %}
+      </div>
+      <div class="form-group">
+        <label>Número de orden *</label>
+        {{ form.numero_orden }}
+        {% if form.numero_orden.errors %}<div class="form-error">{{ form.numero_orden.errors.0 }}</div>{% endif %}
+      </div>
+      <div class="form-group">
+        <label>SKU *</label>
+        {{ form.sku }}
+        {% if form.sku.errors %}<div class="form-error">{{ form.sku.errors.0 }}</div>{% endif %}
+      </div>
+      <div class="form-group">
+        <label>EAN</label>
+        <div class="input-action">
+          {{ form.ean }}
+          <button type="button" class="btn btn-ghost btn-scan-ean" data-scan-ean>Escanear</button>
+          <button type="button" class="btn btn-ghost btn-scan-ean" data-lookup-ean>Buscar</button>
+        </div>
+        <div class="scan-status" data-ean-status></div>
+        {% if form.ean.errors %}<div class="form-error">{{ form.ean.errors.0 }}</div>{% endif %}
+      </div>
+      <div class="form-group">
+        <label>Nombre</label>
+        {{ form.producto_nombre }}
+        {% if form.producto_nombre.errors %}<div class="form-error">{{ form.producto_nombre.errors.0 }}</div>{% endif %}
+      </div>
+      <div class="form-group">
+        <label>Marca</label>
+        {{ form.marca }}
+        {% if form.marca.errors %}<div class="form-error">{{ form.marca.errors.0 }}</div>{% endif %}
+      </div>
+      <div class="form-group">
+        <label>Categoría</label>
+        {{ form.categoria }}
+        {% if form.categoria.errors %}<div class="form-error">{{ form.categoria.errors.0 }}</div>{% endif %}
+      </div>
+      <div class="form-group">
+        <label>Precio de venta</label>
+        {{ form.precio_venta }}
+        {% if form.precio_venta.errors %}<div class="form-error">{{ form.precio_venta.errors.0 }}</div>{% endif %}
+      </div>
+      <div class="form-group">
+        <label>Cantidad</label>
+        {{ form.cantidad }}
+        {% if form.cantidad.errors %}<div class="form-error">{{ form.cantidad.errors.0 }}</div>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Producto -->
+  <div class="form-card">
+    <div class="form-section-title">Producto</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Estado del producto *</label>
+        {{ form.condicion_producto }}
+        {% if form.condicion_producto.errors %}<div class="form-error">{{ form.condicion_producto.errors.0 }}</div>{% endif %}
+      </div>
+      <div class="form-group">
+        <label>Grado</label>
+        {{ form.grado }}
+        {% if form.grado.errors %}<div class="form-error">{{ form.grado.errors.0 }}</div>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Daño -->
+  <div class="form-card">
+    <div class="form-section-title">Descripción</div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>Detalles del daño o motivo de devolución</label>
+      {{ form.detalles_dano }}
+    </div>
+  </div>
+
+  <!-- Fotos -->
+  <div class="form-card">
+    <div class="form-section-title">Fotos del producto</div>
+    {{ formset.management_form }}
+    {% for photo_form in formset %}
+    <div class="formset-item">
+      <div class="formset-header">
+        <span class="formset-label">Foto {{ forloop.counter }}</span>
+        {% if photo_form.instance.pk %}
+        <label class="checkbox-label">
+          {{ photo_form.DELETE }} Eliminar esta foto
+        </label>
+        {% endif %}
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Archivo</label>
+          {{ photo_form.foto }}
+          {% if photo_form.instance.foto %}
+          <div style="margin-top:6px">
+            <img src="{{ photo_form.instance.foto.url }}" style="height:60px;border-radius:6px;object-fit:cover">
+          </div>
+          {% endif %}
+        </div>
+        <div class="form-group">
+          <label>Descripción</label>
+          {{ photo_form.descripcion }}
+        </div>
+      </div>
+      {{ photo_form.id }}
+    </div>
+    {% endfor %}
+    <p style="font-size:12px;color:var(--text-muted);margin-top:6px">Puedes subir hasta 10 fotos (JPG, PNG, WEBP)</p>
+  </div>
+
+  <div class="action-row">
+    {% if cancel_href %}
+    <a href="{{ cancel_href }}" class="btn btn-ghost">Cancelar</a>
+    {% else %}
+    <button type="button" class="btn btn-ghost" data-modal-close>Cancelar</button>
+    {% endif %}
+    <button type="submit" class="btn btn-primary">
+      {{ submit_label }}
+    </button>
+  </div>
+</form>
+
+<script>
+  (function () {
+    function setStatus(form, message, type) {
+      const status = form.querySelector('[data-ean-status]');
+      if (!status) return;
+      status.textContent = message || '';
+      status.className = 'scan-status';
+      if (type) status.classList.add('is-' + type);
+    }
+
+    function setValue(form, name, value) {
+      const field = form.querySelector('[name="' + name + '"]');
+      if (field) field.value = value || '';
+    }
+
+    async function lookupProduct(form) {
+      const eanField = form.querySelector('[name="ean"]');
+      const lookupUrl = form.dataset.productLookupUrl;
+      const ean = eanField ? eanField.value.trim() : '';
+
+      if (!ean) {
+        setStatus(form, 'Escanea o ingresa un EAN primero.', 'error');
+        if (eanField) eanField.focus();
+        return;
+      }
+
+      setStatus(form, 'Buscando producto...', 'loading');
+
+      try {
+        const response = await fetch(lookupUrl + '?ean=' + encodeURIComponent(ean), {
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        const data = await response.json();
+
+        if (!response.ok || !data.found) {
+          setStatus(form, data.error || 'No se encontró el producto.', 'error');
+          return;
+        }
+
+        setValue(form, 'ean', data.product.ean);
+        setValue(form, 'sku', data.product.sku);
+        setValue(form, 'producto_nombre', data.product.nombre);
+        setValue(form, 'marca', data.product.marca);
+        setValue(form, 'categoria', data.product.categoria);
+        setStatus(form, 'Producto encontrado y datos completados.', 'success');
+      } catch (error) {
+        setStatus(form, 'No se pudo consultar el producto. Intenta nuevamente.', 'error');
+      }
+    }
+
+    document.querySelectorAll('form[data-product-lookup-url]').forEach((form) => {
+      if (form.dataset.eanLookupReady) return;
+      form.dataset.eanLookupReady = 'true';
+
+      const eanField = form.querySelector('[name="ean"]');
+      const condicionField = form.querySelector('[name="condicion_producto"]');
+      const gradoField = form.querySelector('[data-grado-producto]');
+      const scanButton = form.querySelector('[data-scan-ean]');
+      const lookupButton = form.querySelector('[data-lookup-ean]');
+      const gradoByCondicion = {
+        nuevo: 'A',
+        caja_danada: 'C',
+        danado: 'D',
+        dano_estetico: 'C',
+      };
+
+      function updateGrado() {
+        if (!condicionField || !gradoField) return;
+        gradoField.value = gradoByCondicion[condicionField.value] || 'A';
+      }
+
+      if (condicionField) {
+        condicionField.addEventListener('change', updateGrado);
+        updateGrado();
+      }
+
+      if (scanButton && eanField) {
+        scanButton.addEventListener('click', () => {
+          eanField.focus();
+          eanField.select();
+          setStatus(form, 'Escanea el código EAN con el lector y presiona Enter.', 'loading');
+        });
+      }
+
+      if (lookupButton) {
+        lookupButton.addEventListener('click', () => lookupProduct(form));
+      }
+
+      if (eanField) {
+        eanField.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            lookupProduct(form);
+          }
+        });
+      }
+    });
+  })();
+</script>

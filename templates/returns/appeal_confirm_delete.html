@@ -1,0 +1,25 @@
+{% extends 'returns/base.html' %}
+{% block title %}Eliminar Apelación {{ apelacion.numero_apelacion }}{% endblock %}
+{% block topbar_title %}Confirmar eliminación{% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'appeal_detail' apelacion.pk %}" class="btn btn-ghost">← Volver</a>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:480px;margin:40px auto">
+  <div class="detail-card" style="text-align:center">
+    <div style="font-size:40px;margin-bottom:16px">⚠</div>
+    <h2 style="font-size:18px;font-weight:700;margin-bottom:8px">¿Eliminar esta apelación?</h2>
+    <p style="color:var(--text-muted);font-size:13px;margin-bottom:20px">
+      Estás a punto de eliminar la apelación <strong style="color:var(--text)">{{ apelacion.numero_apelacion }}</strong>
+      asociada a la orden <strong style="color:var(--text)">{{ apelacion.devolucion.numero_orden }}</strong>.
+      Esta acción no se puede deshacer.
+    </p>
+    <form method="post" class="action-row" style="justify-content:center">
+      {% csrf_token %}
+      <a href="{% url 'appeal_detail' apelacion.pk %}" class="btn btn-ghost">Cancelar</a>
+      <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

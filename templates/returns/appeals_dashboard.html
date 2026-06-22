@@ -1,0 +1,399 @@
+{% extends 'returns/base.html' %}
+{% block title %}Apelaciones{% endblock %}
+{% block topbar_title %}Apelaciones{% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'appeal_create' %}" class="btn btn-primary js-open-appeal-modal">＋ Nueva apelación</a>
+{% endblock %}
+
+{% block content %}
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-value" style="color:var(--text)">{{ stats.total }}</div>
+    <div class="stat-label">Total</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" style="color:var(--yellow)">{{ stats.en_proceso }}</div>
+    <div class="stat-label">En proceso</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" style="color:var(--red)">{{ stats.rechazado }}</div>
+    <div class="stat-label">Rechazadas</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" style="color:var(--purple)">{{ stats.proceso_pago }}</div>
+    <div class="stat-label">Proceso de pago</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" style="color:var(--green)">{{ stats.pagado }}</div>
+    <div class="stat-label">Pagadas</div>
+  </div>
+</div>
+
+<div class="table-wrap" style="margin-bottom:18px">
+  <div class="table-header">
+    <form method="get" class="filter-bar" style="flex:1">
+      <div class="search-wrap">
+        <span class="search-icon">⌕</span>
+        <input type="text" name="q" value="{{ q }}" placeholder="Buscar por orden, ticket, SKU, producto...">
+      </div>
+      <select name="status" class="form-select" style="width:auto">
+        <option value="">Todos los status</option>
+        {% for val, label in status_choices %}
+        <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn-ghost">Filtrar</button>
+      {% if q or status_filter %}
+      <a href="{% url 'appeals_dashboard' %}" class="btn btn-ghost">✕ Limpiar</a>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<div class="table-wrap returns-table-wrap">
+  <div class="table-header">
+    <div class="form-section-title" style="margin:0;padding:0;border:0">Apelaciones en seguimiento</div>
+  </div>
+
+  {% if apelaciones %}
+  <table class="returns-table">
+    <colgroup>
+      <col class="col-date">
+      <col class="col-order">
+      <col class="col-order">
+      <col class="col-sku">
+      <col class="col-product">
+      <col class="col-status">
+      <col class="col-product-status">
+      <col class="col-actions">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Fecha</th>
+        <th>Orden</th>
+        <th>Ticket</th>
+        <th>SKU</th>
+        <th>Producto</th>
+        <th>Status</th>
+        <th>Monto CLP</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in apelaciones %}
+      <tr>
+        <td style="color:var(--text-muted)">{{ a.creado_en|date:"d/m/Y" }}</td>
+        <td><a href="{% url 'return_detail' a.devolucion.pk %}"><strong>{{ a.devolucion.numero_orden }}</strong></a></td>
+        <td>{{ a.numero_apelacion }}</td>
+        <td>{{ a.devolucion.sku }}</td>
+        <td>
+          {% if a.devolucion.producto_nombre %}
+          <div class="table-product-name" title="{{ a.devolucion.producto_nombre }}">{{ a.devolucion.producto_nombre }}</div>
+          {% else %}
+          <div style="color:var(--text-muted)">—</div>
+          {% endif %}
+        </td>
+        <td>
+          <span class="badge badge-{{ a.get_status_color }}">{{ a.get_status_display }}</span>
+        </td>
+        <td>
+          {% if a.estado_cuenta %}
+          <div class="table-product-name" title="${{ a.estado_cuenta }} CLP">${{ a.estado_cuenta }}</div>
+          {% else %}
+          <span style="color:var(--text-muted)">—</span>
+          {% endif %}
+        </td>
+        <td>
+          <div class="row-actions">
+            <a href="{% url 'appeal_detail' a.pk %}" class="btn btn-ghost btn-sm btn-icon" title="Ver" aria-label="Ver apelación">
+              <span aria-hidden="true">◉</span>
+            </a>
+            <a href="{% url 'appeal_edit' a.pk %}" class="btn btn-ghost btn-sm btn-icon" title="Editar" aria-label="Editar apelación">
+              <span aria-hidden="true">✎</span>
+            </a>
+            <a href="{% url 'appeal_delete' a.pk %}" class="btn btn-danger btn-sm btn-icon" title="Eliminar" aria-label="Eliminar apelación">
+              <span aria-hidden="true">×</span>
+            </a>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% include 'returns/_pagination.html' with page_obj=apelaciones_page page_param='apelaciones_page' querystring=apelaciones_page_query %}
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon">◈</div>
+    <div class="empty-title">No hay apelaciones</div>
+    <div class="empty-sub">{% if q or status_filter %}No se encontraron resultados con ese filtro.{% else %}Crea la primera apelación usando el botón superior.{% endif %}</div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="modal" id="appealModal" aria-hidden="true">
+  <div class="modal-backdrop" data-modal-close></div>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="appealModalTitle">
+    <div class="modal-header">
+      <div class="modal-title" id="appealModalTitle">Nueva apelación</div>
+      <button type="button" class="btn btn-ghost modal-close" data-modal-close aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-body">
+      {% url 'appeal_create' as create_action_url %}
+      {% include 'returns/_appeal_form.html' with form=create_form action_url=create_action_url show_picker=True %}
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="devolucionPickerModal" aria-hidden="true">
+  <div class="modal-backdrop" data-picker-close></div>
+  <div class="modal-panel modal-panel-wide" role="dialog" aria-modal="true" aria-labelledby="devolucionPickerTitle">
+    <div class="modal-header">
+      <div class="modal-title" id="devolucionPickerTitle">Seleccionar devolución sin apelación</div>
+      <button type="button" class="btn btn-ghost modal-close" data-picker-close aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-body">
+      {% if todas_devoluciones_sin_apelacion %}
+      <div class="table-wrap">
+        <table class="returns-table">
+          <colgroup>
+            <col class="col-date">
+            <col class="col-order">
+            <col class="col-seller">
+            <col class="col-sku">
+            <col class="col-product">
+            <col class="col-grade">
+            <col class="col-actions">
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Orden</th>
+              <th>Seller</th>
+              <th>SKU</th>
+              <th>Producto</th>
+              <th>Grado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for d in todas_devoluciones_sin_apelacion %}
+            <tr>
+              <td style="color:var(--text-muted)">{{ d.fecha_ingreso|date:"d/m/Y" }}</td>
+              <td><strong>{{ d.numero_orden }}</strong></td>
+              <td>{{ d.get_seller_display }}</td>
+              <td>{{ d.sku }}</td>
+              <td>
+                {% if d.producto_nombre %}
+                <div class="table-product-name" title="{{ d.producto_nombre }}">{{ d.producto_nombre }}</div>
+                {% else %}
+                <div style="color:var(--text-muted)">—</div>
+                {% endif %}
+              </td>
+              <td><span class="badge badge-gray">{{ d.grado }}</span></td>
+              <td>
+                <button type="button" class="btn btn-ghost btn-sm" data-pick-devolucion="{{ d.pk }}">Seleccionar</button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state">
+        <div class="empty-icon">✓</div>
+        <div class="empty-title">No hay productos pendientes</div>
+        <div class="empty-sub">Todas las devoluciones ya tienen apelación.</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const modal = document.getElementById('appealModal');
+    const pickerModal = document.getElementById('devolucionPickerModal');
+    const openButtons = document.querySelectorAll('.js-open-appeal-modal');
+    if (!modal || !openButtons.length) return;
+
+    const devolucionField = modal.querySelector('[name="devolucion"]');
+    const orderSearch = modal.querySelector('[data-order-search]');
+    const suggestions = modal.querySelector('[data-order-suggestions]');
+    const selectedStatus = modal.querySelector('[data-selected-devolucion]');
+    const pickerButton = modal.querySelector('[data-open-devolucion-picker]');
+    const firstField = modal.querySelector('.modal-body select, .modal-body input, .modal-body textarea, .modal-body button');
+
+    function optionLabel(value) {
+      if (!devolucionField || !value) return '';
+      const option = devolucionField.querySelector('option[value="' + value + '"]');
+      return option ? option.textContent.trim() : '';
+    }
+
+    function setSelectedDevolucion(value) {
+      if (!devolucionField) return;
+      devolucionField.value = value || '';
+      const label = optionLabel(value);
+      if (orderSearch) {
+        orderSearch.value = label ? label.split(' - ')[0] : '';
+      }
+      if (selectedStatus) {
+        selectedStatus.textContent = label || 'Selecciona una devolución sin apelación.';
+      }
+    }
+
+    function normalize(value) {
+      return (value || '').toString().trim().toLowerCase();
+    }
+
+    function orderFromOption(option) {
+      return (option.textContent || '').split(' - ')[0].trim();
+    }
+
+    function availableOptions() {
+      if (!devolucionField) return [];
+      return Array.from(devolucionField.options).filter((option) => option.value);
+    }
+
+    function closeSuggestions() {
+      if (!suggestions) return;
+      suggestions.classList.remove('is-open');
+      suggestions.innerHTML = '';
+    }
+
+    function renderSuggestions(matches) {
+      if (!suggestions) return;
+      suggestions.innerHTML = '';
+      if (!matches.length) {
+        closeSuggestions();
+        return;
+      }
+
+      matches.slice(0, 6).forEach((option) => {
+        const parts = option.textContent.trim().split(' - ');
+        const button = document.createElement('button');
+        const strong = document.createElement('strong');
+        const small = document.createElement('small');
+        button.type = 'button';
+        button.className = 'order-suggestion';
+        button.dataset.value = option.value;
+        strong.textContent = parts[0] || option.textContent.trim();
+        small.textContent = option.textContent.trim();
+        button.appendChild(strong);
+        button.appendChild(small);
+        button.addEventListener('click', () => {
+          setSelectedDevolucion(option.value);
+          closeSuggestions();
+        });
+        suggestions.appendChild(button);
+      });
+      suggestions.classList.add('is-open');
+    }
+
+    function setOpen(isOpen) {
+      modal.classList.toggle('is-open', isOpen);
+      modal.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+      document.body.classList.toggle('modal-open', isOpen);
+      if (isOpen && firstField) firstField.focus();
+    }
+
+    function setPickerOpen(isOpen) {
+      if (!pickerModal) return;
+      pickerModal.classList.toggle('is-open', isOpen);
+      pickerModal.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+      document.body.classList.toggle('modal-open', isOpen || modal.classList.contains('is-open'));
+    }
+
+    openButtons.forEach((button) => {
+      button.addEventListener('click', (event) => {
+        event.preventDefault();
+        if (devolucionField && button.dataset.devolucionId) {
+          setSelectedDevolucion(button.dataset.devolucionId);
+        } else if (devolucionField) {
+          setSelectedDevolucion('');
+        }
+        setOpen(true);
+      });
+    });
+
+    if (orderSearch && devolucionField) {
+      orderSearch.addEventListener('input', () => {
+        const query = normalize(orderSearch.value);
+        if (!query) {
+          setSelectedDevolucion('');
+          closeSuggestions();
+          return;
+        }
+
+        const options = availableOptions();
+        const exactMatch = options.find((option) => normalize(orderFromOption(option)) === query);
+        const matches = options.filter((option) => {
+          const label = normalize(option.textContent);
+          const order = normalize(orderFromOption(option));
+          return order.startsWith(query) || label.includes(query);
+        });
+        const match = exactMatch || matches[0];
+
+        if (exactMatch) {
+          setSelectedDevolucion(exactMatch.value);
+          closeSuggestions();
+        } else if (match) {
+          devolucionField.value = match.value;
+          if (selectedStatus) selectedStatus.textContent = 'Coincidencia encontrada. Selecciona una referencia o completa la orden.';
+          renderSuggestions(matches);
+        } else {
+          devolucionField.value = '';
+          closeSuggestions();
+          if (selectedStatus) selectedStatus.textContent = 'No se ha encontrado la orden.';
+        }
+      });
+
+      orderSearch.addEventListener('change', () => {
+        const query = normalize(orderSearch.value);
+        const exactMatch = availableOptions().find((option) => normalize(orderFromOption(option)) === query);
+        if (exactMatch) {
+          setSelectedDevolucion(exactMatch.value);
+        } else if (query && selectedStatus) {
+          devolucionField.value = '';
+          selectedStatus.textContent = 'No se ha encontrado la orden.';
+        }
+      });
+
+      orderSearch.addEventListener('blur', () => {
+        window.setTimeout(closeSuggestions, 160);
+      });
+    }
+
+    if (pickerButton) {
+      pickerButton.addEventListener('click', () => setPickerOpen(true));
+    }
+
+    if (pickerModal) {
+      pickerModal.querySelectorAll('[data-pick-devolucion]').forEach((button) => {
+        button.addEventListener('click', () => {
+          setSelectedDevolucion(button.dataset.pickDevolucion);
+          setPickerOpen(false);
+          setOpen(true);
+        });
+      });
+
+      pickerModal.querySelectorAll('[data-picker-close]').forEach((button) => {
+        button.addEventListener('click', () => setPickerOpen(false));
+      });
+    }
+
+    modal.querySelectorAll('[data-modal-close]').forEach((button) => {
+      button.addEventListener('click', () => setOpen(false));
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && pickerModal && pickerModal.classList.contains('is-open')) {
+        setPickerOpen(false);
+        return;
+      }
+      if (event.key === 'Escape' && modal.classList.contains('is-open')) {
+        setOpen(false);
+      }
+    });
+  })();
+</script>
+{% endblock %}

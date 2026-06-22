@@ -1,0 +1,50 @@
+{% extends 'returns/base.html' %}
+{% block title %}Editar usuario{% endblock %}
+{% block topbar_title %}Editar usuario{% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'users_dashboard' %}" class="btn btn-ghost">← Volver</a>
+{% endblock %}
+
+{% block content %}
+<form method="post" class="form-card">
+  {% csrf_token %}
+  <div class="form-section-title">Datos de {{ usuario.username }}</div>
+  <div class="form-grid cols-3">
+    <div class="form-group">
+      <label class="form-label" for="{{ form.username.id_for_label }}">Usuario *</label>
+      {{ form.username }}
+      {% if form.username.errors %}<div class="form-error">{{ form.username.errors.0 }}</div>{% endif %}
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="{{ form.first_name.id_for_label }}">Nombre</label>
+      {{ form.first_name }}
+      {% if form.first_name.errors %}<div class="form-error">{{ form.first_name.errors.0 }}</div>{% endif %}
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="{{ form.last_name.id_for_label }}">Apellido</label>
+      {{ form.last_name }}
+      {% if form.last_name.errors %}<div class="form-error">{{ form.last_name.errors.0 }}</div>{% endif %}
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="{{ form.email.id_for_label }}">Email</label>
+      {{ form.email }}
+      {% if form.email.errors %}<div class="form-error">{{ form.email.errors.0 }}</div>{% endif %}
+    </div>
+  </div>
+  <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:14px">
+    <label class="checkbox-label">
+      {{ form.is_staff }}
+      <span>Usuario administrador</span>
+    </label>
+    <label class="checkbox-label">
+      {{ form.is_active }}
+      <span>Usuario activo</span>
+    </label>
+  </div>
+  {% if form.non_field_errors %}<div class="form-error" style="margin-top:12px">{{ form.non_field_errors.0 }}</div>{% endif %}
+  <div class="form-actions">
+    <a href="{% url 'users_dashboard' %}" class="btn btn-ghost">Cancelar</a>
+    <button type="submit" class="btn btn-primary">Guardar cambios</button>
+  </div>
+</form>
+{% endblock %}

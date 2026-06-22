@@ -1,0 +1,134 @@
+{% extends 'returns/base.html' %}
+{% block title %}Apelación {{ apelacion.numero_apelacion }}{% endblock %}
+{% block topbar_title %}Apelación {{ apelacion.numero_apelacion }}{% endblock %}
+{% block topbar_actions %}
+  <a href="{% url 'appeal_edit' apelacion.pk %}" class="btn btn-ghost">✏ Editar</a>
+  <a href="{% url 'appeal_delete' apelacion.pk %}" class="btn btn-danger btn-sm">× Eliminar</a>
+  <a href="{% url 'appeals_dashboard' %}" class="btn btn-ghost">← Volver</a>
+{% endblock %}
+
+{% block content %}
+<div class="detail-grid">
+  <div>
+    <div class="detail-status">
+      <span class="badge badge-{{ apelacion.get_status_color }}" style="font-size:13px;padding:5px 14px">
+        {{ apelacion.get_status_display }}
+      </span>
+      {% if apelacion.estado_cuenta %}
+      <span style="color:var(--text-muted);font-size:13px">${{ apelacion.estado_cuenta }} CLP</span>
+      {% endif %}
+    </div>
+
+    <div class="detail-card">
+      <div class="detail-card-title">Datos de la apelación</div>
+      <div class="detail-row">
+        <span class="detail-key">N° de apelación o ticket</span>
+        <span class="detail-val">{{ apelacion.numero_apelacion }}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-key">Orden</span>
+        <span class="detail-val">{{ apelacion.devolucion.numero_orden }}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-key">Creada</span>
+        <span class="detail-val">{{ apelacion.creado_en|date:"d/m/Y H:i" }}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-key">Actualizada</span>
+        <span class="detail-val">{{ apelacion.actualizado_en|date:"d/m/Y H:i" }}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-key">Actualizada por</span>
+        <span class="detail-val">{% if apelacion.actualizado_por %}{{ apelacion.actualizado_por.username }}{% else %}—{% endif %}</span>
+      </div>
+      {% if apelacion.estado_cuenta %}
+      <div class="detail-row">
+        <span class="detail-key">Monto apelación</span>
+        <span class="detail-val">${{ apelacion.estado_cuenta }} CLP</span>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="detail-card">
+      <div class="detail-card-title">Detalle</div>
+      <p style="font-size:13.5px;color:var(--text-dim);line-height:1.7">{{ apelacion.detalle|linebreaksbr }}</p>
+    </div>
+
+    <div class="detail-card">
+      <div class="detail-card-title">Actualizar proceso</div>
+      <div class="process-actions">
+        <form method="post" action="{% url 'appeal_update_status' apelacion.pk %}" class="process-action-form">
+          {% csrf_token %}
+          <input type="hidden" name="status" value="rechazado">
+          <div class="process-action-amount" aria-hidden="true"></div>
+          <button type="submit" class="btn btn-danger process-action-btn" {% if apelacion.status == 'rechazado' %}disabled{% endif %}>
+            Rechazado
+          </button>
+        </form>
+        <form method="post" action="{% url 'appeal_update_status' apelacion.pk %}" class="process-action-form">
+          {% csrf_token %}
+          <input type="hidden" name="status" value="proceso_pago">
+          <input type="number" name="estado_cuenta" class="form-input process-action-amount" min="0" step="1" placeholder="Monto $ CLP" value="{{ apelacion.estado_cuenta }}">
+          <button type="submit" class="btn btn-purple process-action-btn" {% if apelacion.status == 'proceso_pago' %}disabled{% endif %}>
+            Proceso de pago
+          </button>
+        </form>
+        <form method="post" action="{% url 'appeal_update_status' apelacion.pk %}" class="process-action-form">
+          {% csrf_token %}
+          <input type="hidden" name="status" value="pagado">
+          <div class="process-action-amount" aria-hidden="true"></div>
+          <button type="submit" class="btn btn-green process-action-btn" {% if apelacion.status == 'pagado' %}disabled{% endif %}>
+            Pagado
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="detail-card">
+      <div class="detail-card-title">Flujo de apelación</div>
+      <div class="flow-checklist">
+        {% for paso in apelacion.checklist_flujo %}
+        <div class="flow-step {% if paso.completo %}is-complete{% endif %}">
+          <div class="flow-step-marker">{% if paso.completo %}✓{% else %}{{ paso.numero }}{% endif %}</div>
+          <div>
+            <div class="flow-step-title">{{ paso.numero }}. {{ paso.titulo }}</div>
+            <div class="flow-step-detail">{{ paso.detalle }}</div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="detail-card">
+      <div class="detail-card-title">Producto</div>
+      <div class="detail-row">
+        <span class="detail-key">SKU</span>
+        <span class="detail-val">{{ apelacion.devolucion.sku }}</span>
+      </div>
+      {% if apelacion.devolucion.producto_nombre %}
+      <div class="detail-row">
+        <span class="detail-key">Nombre</span>
+        <span class="detail-val">{{ apelacion.devolucion.producto_nombre }}</span>
+      </div>
+      {% endif %}
+      <div class="detail-row">
+        <span class="detail-key">Seller</span>
+        <span class="detail-val">{{ apelacion.devolucion.get_seller_display }}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-key">Estado producto</span>
+        <span class="detail-val">{{ apelacion.devolucion.get_condicion_producto_display }}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-key">Grado</span>
+        <span class="detail-val">{{ apelacion.devolucion.grado }}</span>
+      </div>
+      <div style="margin-top:12px">
+        <a href="{% url 'return_detail' apelacion.devolucion.pk %}" class="btn btn-ghost btn-sm">Ver devolución</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
