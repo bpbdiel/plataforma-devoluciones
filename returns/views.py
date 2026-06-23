@@ -1,3 +1,4 @@
+from datetime import timedelta
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
@@ -26,6 +27,28 @@ def querystring_without(request, *keys):
     return f'{encoded}&' if encoded else ''
 
 
+def period_dates(request):
+    today = timezone.localdate()
+    period = request.GET.get('period', '')
+
+    if period == 'today':
+        return period, today, today
+    if period == 'week':
+        return period, today - timedelta(days=today.weekday()), today
+    if period == 'month':
+        return period, today.replace(day=1), today
+    return period, None, None
+
+
+def apply_period_filter(queryset, request, field_name):
+    period, start_date, end_date = period_dates(request)
+    if start_date:
+        queryset = queryset.filter(**{f'{field_name}__gte': start_date})
+    if end_date:
+        queryset = queryset.filter(**{f'{field_name}__lte': end_date})
+    return queryset, period
+
+
 def must_change_password(user):
     if not user.is_authenticated:
         return False
@@ -48,6 +71,7 @@ def filtered_report_returns(request):
     grado = request.GET.get('grado', '').strip()
     apelacion = request.GET.get('apelacion', '').strip()
     appeal_status = request.GET.get('appeal_status', '').strip()
+    period, start_date, end_date = period_dates(request)
 
     if q:
         devoluciones = devoluciones.filter(
@@ -62,9 +86,13 @@ def filtered_report_returns(request):
             Q(apelaciones__detalle__icontains=q) |
             Q(apelaciones__estado_cuenta__icontains=q)
         )
-    if fecha_desde:
+    if start_date:
+        devoluciones = devoluciones.filter(fecha_ingreso__gte=start_date)
+    elif fecha_desde:
         devoluciones = devoluciones.filter(fecha_ingreso__gte=fecha_desde)
-    if fecha_hasta:
+    if end_date:
+        devoluciones = devoluciones.filter(fecha_ingreso__lte=end_date)
+    elif fecha_hasta:
         devoluciones = devoluciones.filter(fecha_ingreso__lte=fecha_hasta)
     if seller:
         devoluciones = devoluciones.filter(seller=seller)
@@ -114,6 +142,7 @@ def report_export_response(devoluciones):
         'Detalle apelación',
         'Status apelación',
         'Monto CLP',
+        'Diferencia CLP',
         'Creada por',
         'Actualizada por',
         'Fecha creación apelación',
@@ -138,6 +167,12 @@ def report_export_response(devoluciones):
             apelaciones = [None]
 
         for apelacion in apelaciones:
+            diferencia = ''
+            if apelacion and devolucion.precio_venta is not None and apelacion.estado_cuenta:
+                try:
+                    diferencia = int(devolucion.precio_venta) - int(apelacion.estado_cuenta)
+                except (TypeError, ValueError):
+                    diferencia = ''
             ws.append([
                 devolucion.id,
                 devolucion.fecha_ingreso,
@@ -164,6 +199,7 @@ def report_export_response(devoluciones):
                 apelacion.detalle if apelacion else '',
                 apelacion.get_status_display() if apelacion else '',
                 apelacion.estado_cuenta if apelacion else '',
+                diferencia,
                 apelacion.creado_por.username if apelacion and apelacion.creado_por else '',
                 apelacion.actualizado_por.username if apelacion and apelacion.actualizado_por else '',
                 timezone.localtime(apelacion.creado_en).strftime('%d/%m/%Y %H:%M') if apelacion else '',
@@ -252,6 +288,38 @@ def product_lookup_by_ean(request):
 
 @login_required
 def dashboard(request):
+    today = timezone.localdate()
+    period = request.GET.get('period', 'month')
+    fecha_desde = request.GET.get('fecha_desde', '')
+    fecha_hasta = request.GET.get('fecha_hasta', '')
+
+    if period == 'today':
+        start_date = today
+        end_date = today
+        period_label = 'Hoy'
+    elif period == 'week':
+        start_date = today - timedelta(days=today.weekday())
+        end_date = today
+        period_label = 'Esta semana'
+    elif period == 'custom':
+        start_date = fecha_desde or None
+        end_date = fecha_hasta or None
+        period_label = 'Personalizado'
+    else:
+        period = 'month'
+        start_date = today.replace(day=1)
+        end_date = today
+        period_label = 'Mes actual'
+
+    devoluciones_qs = Return.objects.all()
+    apelaciones_qs = Appeal.objects.all()
+    if start_date:
+        devoluciones_qs = devoluciones_qs.filter(fecha_ingreso__gte=start_date)
+        apelaciones_qs = apelaciones_qs.filter(creado_en__date__gte=start_date)
+    if end_date:
+        devoluciones_qs = devoluciones_qs.filter(fecha_ingreso__lte=end_date)
+        apelaciones_qs = apelaciones_qs.filter(creado_en__date__lte=end_date)
+
     def build_donut(items, total, color_map):
         if not total:
             return 'var(--gray-soft) 0deg 360deg'
@@ -270,20 +338,25 @@ def dashboard(request):
         return f'${value:,.0f}'.replace(',', '.') + ' CLP'
 
     grado_counts = {
-        grado: Return.objects.filter(grado=grado).count()
+        grado: devoluciones_qs.filter(grado=grado).count()
         for grado, _ in Return.GRADO_CHOICES
     }
     status_counts = {
-        status: Appeal.objects.filter(status=status).count()
+        status: apelaciones_qs.filter(status=status).count()
         for status, _ in Appeal.STATUS_CHOICES
     }
-    total_devoluciones = Return.objects.count()
-    total_apelaciones = Appeal.objects.count()
+    total_devoluciones = devoluciones_qs.count()
+    total_apelaciones = apelaciones_qs.count()
     total_pagado_apelaciones = sum(
         int(apelacion.estado_cuenta)
-        for apelacion in Appeal.objects.filter(status='pagado').only('estado_cuenta')
+        for apelacion in apelaciones_qs.filter(status='pagado').only('estado_cuenta')
         if apelacion.estado_cuenta and apelacion.estado_cuenta.isdigit()
     )
+    costo_devoluciones_pagadas = 0
+    for apelacion in apelaciones_qs.filter(status='pagado').select_related('devolucion').only('estado_cuenta', 'devolucion__precio_venta'):
+        if apelacion.estado_cuenta and apelacion.estado_cuenta.isdigit() and apelacion.devolucion.precio_venta is not None:
+            costo_devoluciones_pagadas += int(apelacion.devolucion.precio_venta)
+    perdida_estimada_apelaciones = max(costo_devoluciones_pagadas - total_pagado_apelaciones, 0)
     grado_colors = {
         'A': 'var(--green)',
         'C': 'var(--yellow)',
@@ -316,10 +389,27 @@ def dashboard(request):
         for status, label in Appeal.STATUS_CHOICES
         for count in [status_counts[status]]
     ]
+    raw_category_counts = (
+        devoluciones_qs.exclude(categoria='')
+        .values('categoria')
+        .annotate(count=Count('id'))
+        .order_by('-count', 'categoria')[:5]
+    )
+    top_category_count = raw_category_counts[0]['count'] if raw_category_counts else 0
+    category_chart = [
+        {
+            'label': item['categoria'],
+            'count': item['count'],
+            'percent': round((item['count'] / total_devoluciones) * 100) if total_devoluciones else 0,
+            'relative_percent': round((item['count'] / top_category_count) * 100) if top_category_count else 0,
+        }
+        for item in raw_category_counts
+    ]
 
     context = {
         'grado_chart': grado_chart,
         'appeal_chart': appeal_chart,
+        'category_chart': category_chart,
         'grade_donut_gradient': build_donut(
             [(grado, grado_counts[grado]) for grado, _ in Return.GRADO_CHOICES],
             total_devoluciones,
@@ -334,6 +424,12 @@ def dashboard(request):
         'total_apelaciones': total_apelaciones,
         'total_pagado_apelaciones': total_pagado_apelaciones,
         'total_pagado_apelaciones_display': clp_format(total_pagado_apelaciones),
+        'perdida_estimada_apelaciones': perdida_estimada_apelaciones,
+        'perdida_estimada_apelaciones_display': clp_format(perdida_estimada_apelaciones),
+        'period': period,
+        'period_label': period_label,
+        'fecha_desde': fecha_desde,
+        'fecha_hasta': fecha_hasta,
     }
     return render(request, 'returns/home_dashboard.html', context)
 
@@ -345,6 +441,7 @@ def returns_dashboard(request):
     # Filtros
     q = request.GET.get('q', '')
     condicion = request.GET.get('condicion', '')
+    devoluciones, period = apply_period_filter(devoluciones, request, 'fecha_ingreso')
     if q:
         devoluciones = devoluciones.filter(
             Q(numero_orden__icontains=q) |
@@ -362,17 +459,19 @@ def returns_dashboard(request):
 
     # Stats
     stats = {
-        'total': Return.objects.count(),
-        'nuevo': Return.objects.filter(condicion_producto='nuevo').count(),
-        'caja_danada': Return.objects.filter(condicion_producto='caja_danada').count(),
-        'danado': Return.objects.filter(condicion_producto='danado').count(),
-        'dano_estetico': Return.objects.filter(condicion_producto='dano_estetico').count(),
+        'total': devoluciones.count(),
+        'nuevo': devoluciones.filter(condicion_producto='nuevo').count(),
+        'caja_danada': devoluciones.filter(condicion_producto='caja_danada').count(),
+        'danado': devoluciones.filter(condicion_producto='danado').count(),
+        'dano_estetico': devoluciones.filter(condicion_producto='dano_estetico').count(),
     }
 
     context = {
         'devoluciones': devoluciones_page,
         'devoluciones_page': devoluciones_page,
         'devoluciones_page_query': querystring_without(request, 'page'),
+        'period': period,
+        'period_query': querystring_without(request, 'period', 'page'),
         'stats': stats,
         'q': q,
         'condicion_filter': condicion,
@@ -390,6 +489,7 @@ def appeals_dashboard(request):
     todas_devoluciones_sin_apelacion = devoluciones_sin_apelacion.order_by('-fecha_ingreso', '-id')
     q = request.GET.get('q', '')
     status = request.GET.get('status', '')
+    apelaciones, period = apply_period_filter(apelaciones, request, 'creado_en__date')
 
     if q:
         apelaciones = apelaciones.filter(
@@ -410,12 +510,35 @@ def appeals_dashboard(request):
     if status:
         apelaciones = apelaciones.filter(status=status)
 
+    def clp_format(value):
+        sign = '-' if value < 0 else ''
+        return f'{sign}${abs(value):,.0f}'.replace(',', '.') + ' CLP'
+
+    costo_devoluciones_con_pago = 0
+    total_pagado_apelaciones = 0
+    for apelacion in apelaciones.exclude(estado_cuenta=''):
+        if not apelacion.estado_cuenta.isdigit() or apelacion.devolucion.precio_venta is None:
+            continue
+        costo_devoluciones_con_pago += int(apelacion.devolucion.precio_venta)
+        total_pagado_apelaciones += int(apelacion.estado_cuenta)
+
+    diferencia_pagos = costo_devoluciones_con_pago - total_pagado_apelaciones
+    perdida_estimada = max(diferencia_pagos, 0)
+
     stats = {
-        'total': Appeal.objects.count(),
-        'en_proceso': Appeal.objects.filter(status='en_proceso').count(),
-        'rechazado': Appeal.objects.filter(status='rechazado').count(),
-        'proceso_pago': Appeal.objects.filter(status='proceso_pago').count(),
-        'pagado': Appeal.objects.filter(status='pagado').count(),
+        'total': apelaciones.count(),
+        'en_proceso': apelaciones.filter(status='en_proceso').count(),
+        'rechazado': apelaciones.filter(status='rechazado').count(),
+        'proceso_pago': apelaciones.filter(status='proceso_pago').count(),
+        'pagado': apelaciones.filter(status='pagado').count(),
+        'costo_devoluciones_con_pago': costo_devoluciones_con_pago,
+        'total_pagado_apelaciones': total_pagado_apelaciones,
+        'diferencia_pagos': diferencia_pagos,
+        'perdida_estimada': perdida_estimada,
+        'costo_devoluciones_con_pago_display': clp_format(costo_devoluciones_con_pago),
+        'total_pagado_apelaciones_display': clp_format(total_pagado_apelaciones),
+        'diferencia_pagos_display': clp_format(diferencia_pagos),
+        'perdida_estimada_display': clp_format(perdida_estimada),
     }
 
     devoluciones_sin_apelacion_page = paginate_queryset(
@@ -430,6 +553,8 @@ def appeals_dashboard(request):
         'apelaciones': apelaciones_page,
         'apelaciones_page': apelaciones_page,
         'apelaciones_page_query': querystring_without(request, 'apelaciones_page'),
+        'period': period,
+        'period_query': querystring_without(request, 'period', 'apelaciones_page'),
         'devoluciones_sin_apelacion': devoluciones_sin_apelacion_page,
         'devoluciones_sin_apelacion_page': devoluciones_sin_apelacion_page,
         'devoluciones_sin_apelacion_page_query': querystring_without(request, 'pendientes_page'),
@@ -454,6 +579,8 @@ def report_dashboard(request):
         'devoluciones': devoluciones_page,
         'devoluciones_page': devoluciones_page,
         'devoluciones_page_query': querystring_without(request, 'page'),
+        'period': request.GET.get('period', '').strip(),
+        'period_query': querystring_without(request, 'period', 'page', 'fecha_desde', 'fecha_hasta'),
         'q': request.GET.get('q', '').strip(),
         'fecha_desde': request.GET.get('fecha_desde', '').strip(),
         'fecha_hasta': request.GET.get('fecha_hasta', '').strip(),

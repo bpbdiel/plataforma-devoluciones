@@ -1,4 +1,5 @@
 {% extends 'returns/base.html' %}
+{% load returns_format %}
 {% block title %}Reporte{% endblock %}
 {% block topbar_title %}Reporte{% endblock %}
 
@@ -6,9 +7,16 @@
 <div class="table-wrap" style="margin-bottom:18px">
   <div class="table-header">
     <form method="get" class="filter-bar" style="flex:1">
+      {% if period %}<input type="hidden" name="period" value="{{ period }}">{% endif %}
       <div class="search-wrap">
         <span class="search-icon">⌕</span>
         <input type="text" name="q" value="{{ q }}" placeholder="Buscar orden, ticket, SKU, producto, marca...">
+      </div>
+      <div class="period-filter-bar">
+        <a href="?{{ period_query }}" class="btn btn-sm {% if not period %}btn-primary{% else %}btn-ghost{% endif %}">Todo</a>
+        <a href="?{{ period_query }}period=month" class="btn btn-sm {% if period == 'month' %}btn-primary{% else %}btn-ghost{% endif %}">Mes</a>
+        <a href="?{{ period_query }}period=week" class="btn btn-sm {% if period == 'week' %}btn-primary{% else %}btn-ghost{% endif %}">Semana</a>
+        <a href="?{{ period_query }}period=today" class="btn btn-sm {% if period == 'today' %}btn-primary{% else %}btn-ghost{% endif %}">Día</a>
       </div>
       <input type="date" name="fecha_desde" value="{{ fecha_desde }}" class="form-input" style="width:auto" title="Desde">
       <input type="date" name="fecha_hasta" value="{{ fecha_hasta }}" class="form-input" style="width:auto" title="Hasta">
@@ -49,7 +57,7 @@
       </select>
       <button type="submit" class="btn btn-ghost">Filtrar</button>
       <button type="submit" name="export" value="xlsx" class="btn btn-primary">Exportar Excel</button>
-      {% if q or fecha_desde or fecha_hasta or seller_filter or estado_filter or condicion_filter or grado_filter or apelacion_filter or appeal_status_filter %}
+      {% if q or fecha_desde or fecha_hasta or seller_filter or estado_filter or condicion_filter or grado_filter or apelacion_filter or appeal_status_filter or period %}
       <a href="{% url 'report_dashboard' %}" class="btn btn-ghost">✕ Limpiar</a>
       {% endif %}
     </form>
@@ -82,6 +90,7 @@
       <col class="col-grade">
       <col class="col-appeal">
       <col class="col-product-status">
+      <col class="col-product-status">
       <col class="col-photos">
     </colgroup>
     <thead>
@@ -97,6 +106,7 @@
         <th>Grado</th>
         <th>Apelación</th>
         <th>Status apelación</th>
+        <th>Diferencia</th>
         <th>Fotos</th>
       </tr>
     </thead>
@@ -135,6 +145,17 @@
           {% with apelacion=d.apelaciones.first %}
           {% if apelacion %}
           <span class="badge badge-{{ apelacion.get_status_color }}">{{ apelacion.get_status_display }}</span>
+          {% else %}
+          <span style="color:var(--text-muted)">—</span>
+          {% endif %}
+          {% endwith %}
+        </td>
+        <td>
+          {% with apelacion=d.apelaciones.first %}
+          {% if apelacion and d.precio_venta != None and apelacion.estado_cuenta %}
+          <div class="table-product-name" title="Precio: {{ d.precio_venta|clp }} · Pagado: {{ apelacion.estado_cuenta|clp }}">
+            {{ d.precio_venta|clp_difference:apelacion.estado_cuenta }}
+          </div>
           {% else %}
           <span style="color:var(--text-muted)">—</span>
           {% endif %}

@@ -38,9 +38,16 @@
 <div class="table-wrap returns-table-wrap">
   <div class="table-header">
     <form method="get" class="filter-bar" style="flex:1">
+      {% if period %}<input type="hidden" name="period" value="{{ period }}">{% endif %}
       <div class="search-wrap">
         <span class="search-icon">⌕</span>
         <input type="text" name="q" value="{{ q }}" placeholder="Buscar por orden, seller, SKU, EAN, marca...">
+      </div>
+      <div class="period-filter-bar">
+        <a href="?{{ period_query }}" class="btn btn-sm {% if not period %}btn-primary{% else %}btn-ghost{% endif %}">Todo</a>
+        <a href="?{{ period_query }}period=month" class="btn btn-sm {% if period == 'month' %}btn-primary{% else %}btn-ghost{% endif %}">Mes</a>
+        <a href="?{{ period_query }}period=week" class="btn btn-sm {% if period == 'week' %}btn-primary{% else %}btn-ghost{% endif %}">Semana</a>
+        <a href="?{{ period_query }}period=today" class="btn btn-sm {% if period == 'today' %}btn-primary{% else %}btn-ghost{% endif %}">Día</a>
       </div>
       <select name="condicion" class="form-select" style="width:auto">
         <option value="">Todos los estados del producto</option>
@@ -49,7 +56,7 @@
         {% endfor %}
       </select>
       <button type="submit" class="btn btn-ghost">Filtrar</button>
-      {% if q or condicion_filter %}
+      {% if q or condicion_filter or period %}
       <a href="{% url 'returns_dashboard' %}" class="btn btn-ghost">✕ Limpiar</a>
       {% endif %}
     </form>

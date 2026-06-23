@@ -1,4 +1,5 @@
 {% extends 'returns/base.html' %}
+{% load returns_format %}
 {% block title %}Apelaciones{% endblock %}
 {% block topbar_title %}Apelaciones{% endblock %}
 {% block topbar_actions %}
@@ -6,7 +7,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="stats-grid">
+<div class="stats-grid appeals-stats-grid">
   <div class="stat-card">
     <div class="stat-value" style="color:var(--text)">{{ stats.total }}</div>
     <div class="stat-label">Total</div>
@@ -27,14 +28,33 @@
     <div class="stat-value" style="color:var(--green)">{{ stats.pagado }}</div>
     <div class="stat-label">Pagadas</div>
   </div>
+  <div class="stat-card stat-card-money">
+    <div class="stat-value stat-value-money" style="color:var(--text)">{{ stats.costo_devoluciones_con_pago_display }}</div>
+    <div class="stat-label">Costo devoluciones</div>
+  </div>
+  <div class="stat-card stat-card-money">
+    <div class="stat-value stat-value-money" style="color:var(--green)">{{ stats.total_pagado_apelaciones_display }}</div>
+    <div class="stat-label">Total pagado</div>
+  </div>
+  <div class="stat-card stat-card-money">
+    <div class="stat-value stat-value-money" style="color:{% if stats.perdida_estimada > 0 %}var(--red){% else %}var(--green){% endif %}">{{ stats.perdida_estimada_display }}</div>
+    <div class="stat-label">Pérdida estimada</div>
+  </div>
 </div>
 
 <div class="table-wrap returns-table-wrap">
   <div class="table-header">
     <form method="get" class="filter-bar" style="flex:1">
+      {% if period %}<input type="hidden" name="period" value="{{ period }}">{% endif %}
       <div class="search-wrap">
         <span class="search-icon">⌕</span>
         <input type="text" name="q" value="{{ q }}" placeholder="Buscar por orden, ticket, SKU, producto...">
+      </div>
+      <div class="period-filter-bar">
+        <a href="?{{ period_query }}" class="btn btn-sm {% if not period %}btn-primary{% else %}btn-ghost{% endif %}">Todo</a>
+        <a href="?{{ period_query }}period=month" class="btn btn-sm {% if period == 'month' %}btn-primary{% else %}btn-ghost{% endif %}">Mes</a>
+        <a href="?{{ period_query }}period=week" class="btn btn-sm {% if period == 'week' %}btn-primary{% else %}btn-ghost{% endif %}">Semana</a>
+        <a href="?{{ period_query }}period=today" class="btn btn-sm {% if period == 'today' %}btn-primary{% else %}btn-ghost{% endif %}">Día</a>
       </div>
       <select name="status" class="form-select" style="width:auto">
         <option value="">Todos los status</option>
@@ -43,7 +63,7 @@
         {% endfor %}
       </select>
       <button type="submit" class="btn btn-ghost">Filtrar</button>
-      {% if q or status_filter %}
+      {% if q or status_filter or period %}
       <a href="{% url 'appeals_dashboard' %}" class="btn btn-ghost">✕ Limpiar</a>
       {% endif %}
     </form>
@@ -60,6 +80,7 @@
       <col class="col-product">
       <col class="col-status">
       <col class="col-product-status">
+      <col class="col-product-status">
       <col class="col-actions">
     </colgroup>
     <thead>
@@ -72,6 +93,7 @@
         <th>Producto</th>
         <th>Status</th>
         <th>Monto CLP</th>
+        <th>Diferencia</th>
         <th>Acciones</th>
       </tr>
     </thead>
@@ -95,7 +117,16 @@
         </td>
         <td>
           {% if a.estado_cuenta %}
-          <div class="table-product-name" title="${{ a.estado_cuenta }} CLP">${{ a.estado_cuenta }}</div>
+          <div class="table-product-name" title="{{ a.estado_cuenta|clp }}">{{ a.estado_cuenta|clp }}</div>
+          {% else %}
+          <span style="color:var(--text-muted)">—</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if a.devolucion.precio_venta != None and a.estado_cuenta %}
+          <div class="table-product-name" title="Precio: {{ a.devolucion.precio_venta|clp }} · Pagado: {{ a.estado_cuenta|clp }}">
+            {{ a.devolucion.precio_venta|clp_difference:a.estado_cuenta }}
+          </div>
           {% else %}
           <span style="color:var(--text-muted)">—</span>
           {% endif %}

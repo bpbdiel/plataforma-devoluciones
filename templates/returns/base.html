@@ -211,6 +211,43 @@
     }
     .stat-value { font-size: 28px; font-weight: 700; line-height: 1; margin-bottom: 4px; }
     .stat-label { font-size: 12px; color: var(--text-muted); }
+    .appeals-stats-grid {
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      align-items: stretch;
+    }
+    .stat-card-money {
+      grid-column: span 2;
+    }
+    .stat-value-money {
+      font-size: 22px;
+      line-height: 1.12;
+      white-space: nowrap;
+      word-break: keep-all;
+    }
+    .dashboard-filter-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+      padding: 14px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+    }
+    .dashboard-period-actions,
+    .dashboard-custom-period {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .dashboard-custom-period .form-input {
+      width: auto;
+      min-width: 145px;
+    }
     .dashboard-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -225,6 +262,10 @@
       min-height: 335px;
       display: flex;
       flex-direction: column;
+    }
+    .chart-card-wide {
+      margin-top: 18px;
+      min-height: 0;
     }
     .chart-card-header {
       display: flex;
@@ -334,6 +375,11 @@
       font-size: 18px;
       white-space: nowrap;
     }
+    .chart-summary-row-tight {
+      margin-top: -8px;
+      padding-top: 0;
+      border-top: 0;
+    }
     .bar-row {
       display: grid;
       grid-template-columns: 118px 1fr 44px;
@@ -370,6 +416,56 @@
       font-size: 12px;
       font-weight: 700;
       text-align: right;
+    }
+    .category-ranking {
+      display: grid;
+      gap: 14px;
+      padding: 18px;
+    }
+    .category-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 92px;
+      gap: 14px;
+      align-items: center;
+    }
+    .category-main {
+      min-width: 0;
+      display: grid;
+      gap: 7px;
+    }
+    .category-name {
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .category-track {
+      height: 12px;
+      border-radius: 999px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .category-fill {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--accent);
+    }
+    .category-metric {
+      display: grid;
+      justify-items: end;
+      gap: 2px;
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .category-metric strong {
+      color: var(--text);
+      font-size: 16px;
+      line-height: 1;
     }
 
     /* Table */
@@ -567,6 +663,15 @@
     /* Search & filter bar */
     .filter-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%; }
     .search-wrap { position: relative; flex: 1; min-width: 200px; }
+    .period-filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .period-filter-bar .btn {
+      min-height: 34px;
+    }
     .search-wrap input {
       width: 100%;
       background: var(--surface2); border: 1px solid var(--border);
@@ -993,6 +1098,9 @@
       }
       table:not(.returns-table) {
         min-width: 760px;
+      }
+      .stat-card-money {
+        grid-column: 1 / -1;
       }
       .form-grid { grid-template-columns: 1fr; }
       .form-grid.cols-3 { grid-template-columns: 1fr; }
