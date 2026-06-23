@@ -150,6 +150,12 @@ La guia completa para servidor esta en:
 DEPLOY.md
 ```
 
+Para Coolify:
+
+```text
+COOLIFY.md
+```
+
 La configuracion recomendada es:
 
 - VPS Ubuntu

@@ -7,6 +7,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-devoluciones-key-change-in-production-xyz123')
 
 DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() in ('true', '1', 'yes')
+SERVE_MEDIA_FILES = os.getenv('DJANGO_SERVE_MEDIA', 'False').lower() in ('true', '1', 'yes')
 
 ALLOWED_HOSTS = [
     host.strip()
