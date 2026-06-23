@@ -103,7 +103,10 @@ DJANGO_SECRET_KEY=una-clave-larga-y-segura
 DJANGO_DEBUG=False
 DJANGO_ALLOWED_HOSTS=tu-dominio.cl,www.tu-dominio.cl,IP_DEL_SERVIDOR
 DJANGO_CSRF_TRUSTED_ORIGINS=https://tu-dominio.cl,https://www.tu-dominio.cl
+DJANGO_TIME_ZONE=America/Santiago
 ```
+
+La zona horaria tambien puede cambiarse desde el panel de administracion de Django en **Configuración de plataforma**.
 
 ## Levantar con Docker
 

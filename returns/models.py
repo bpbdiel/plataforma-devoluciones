@@ -3,6 +3,58 @@ from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+
+TIMEZONE_CHOICES = [
+    ('America/Santiago', 'Chile - Santiago'),
+    ('America/Punta_Arenas', 'Chile - Punta Arenas'),
+    ('America/Argentina/Buenos_Aires', 'Argentina - Buenos Aires'),
+    ('America/Bogota', 'Colombia - Bogota'),
+    ('America/Lima', 'Peru - Lima'),
+    ('America/La_Paz', 'Bolivia - La Paz'),
+    ('America/Asuncion', 'Paraguay - Asuncion'),
+    ('America/Montevideo', 'Uruguay - Montevideo'),
+    ('America/Sao_Paulo', 'Brasil - Sao Paulo'),
+    ('America/Mexico_City', 'Mexico - Ciudad de Mexico'),
+    ('America/New_York', 'Estados Unidos - New York'),
+    ('America/Los_Angeles', 'Estados Unidos - Los Angeles'),
+    ('UTC', 'UTC'),
+]
+
+
+class SiteConfiguration(models.Model):
+    timezone = models.CharField(
+        max_length=64,
+        choices=TIMEZONE_CHOICES,
+        default='America/Santiago',
+        verbose_name='Zona horaria',
+    )
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Configuración de plataforma'
+        verbose_name_plural = 'Configuración de plataforma'
+
+    def __str__(self):
+        return 'Configuración de plataforma'
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def clean(self):
+        super().clean()
+        try:
+            ZoneInfo(self.timezone)
+        except ZoneInfoNotFoundError:
+            from django.core.exceptions import ValidationError
+            raise ValidationError({'timezone': 'Selecciona una zona horaria válida.'})
+
+    @classmethod
+    def load(cls):
+        config, _ = cls.objects.get_or_create(pk=1)
+        return config
 
 
 class Product(models.Model):

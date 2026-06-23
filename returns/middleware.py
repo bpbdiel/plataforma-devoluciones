@@ -1,7 +1,26 @@
+from django.db.utils import DatabaseError, OperationalError
 from django.shortcuts import redirect
+from django.utils import timezone
 from django.urls import reverse
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from .models import UserProfile
+from .models import SiteConfiguration, UserProfile
+
+
+class SiteTimezoneMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        try:
+            configured_timezone = SiteConfiguration.load().timezone
+            timezone.activate(ZoneInfo(configured_timezone))
+        except (DatabaseError, OperationalError, ZoneInfoNotFoundError):
+            timezone.deactivate()
+
+        response = self.get_response(request)
+        timezone.deactivate()
+        return response
 
 
 class ForcePasswordChangeMiddleware:

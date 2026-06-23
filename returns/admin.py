@@ -3,7 +3,19 @@ from django import forms
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import path
-from .models import Appeal, Product, Return, ReturnPhoto
+from .models import Appeal, Product, Return, ReturnPhoto, SiteConfiguration
+
+
+@admin.register(SiteConfiguration)
+class SiteConfigurationAdmin(admin.ModelAdmin):
+    fields = ['timezone', 'actualizado_en']
+    readonly_fields = ['actualizado_en']
+
+    def has_add_permission(self, request):
+        return not SiteConfiguration.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 class ProductImportForm(forms.Form):

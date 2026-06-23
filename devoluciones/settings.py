@@ -38,6 +38,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'returns.middleware.SiteTimezoneMiddleware',
     'returns.middleware.ForcePasswordChangeMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -80,7 +81,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LANGUAGE_CODE = 'es-cl'
-TIME_ZONE = 'America/Santiago'
+TIME_ZONE = os.getenv('DJANGO_TIME_ZONE', 'America/Santiago')
 USE_I18N = True
 USE_TZ = True
 
