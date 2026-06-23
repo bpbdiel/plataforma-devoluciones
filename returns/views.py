@@ -344,7 +344,7 @@ def returns_dashboard(request):
 
     # Filtros
     q = request.GET.get('q', '')
-    estado = request.GET.get('estado', '')
+    condicion = request.GET.get('condicion', '')
     if q:
         devoluciones = devoluciones.filter(
             Q(numero_orden__icontains=q) |
@@ -355,19 +355,18 @@ def returns_dashboard(request):
             Q(marca__icontains=q) |
             Q(categoria__icontains=q)
         )
-    if estado:
-        devoluciones = devoluciones.filter(estado=estado)
+    if condicion:
+        devoluciones = devoluciones.filter(condicion_producto=condicion)
 
     devoluciones_page = paginate_queryset(request, devoluciones, 'page', 12)
 
     # Stats
     stats = {
         'total': Return.objects.count(),
-        'recibido': Return.objects.filter(estado='recibido').count(),
-        'en_revision': Return.objects.filter(estado='en_revision').count(),
-        'aprobado': Return.objects.filter(estado='aprobado').count(),
-        'rechazado': Return.objects.filter(estado='rechazado').count(),
-        'reembolsado': Return.objects.filter(estado='reembolsado').count(),
+        'nuevo': Return.objects.filter(condicion_producto='nuevo').count(),
+        'caja_danada': Return.objects.filter(condicion_producto='caja_danada').count(),
+        'danado': Return.objects.filter(condicion_producto='danado').count(),
+        'dano_estetico': Return.objects.filter(condicion_producto='dano_estetico').count(),
     }
 
     context = {
@@ -376,8 +375,8 @@ def returns_dashboard(request):
         'devoluciones_page_query': querystring_without(request, 'page'),
         'stats': stats,
         'q': q,
-        'estado_filter': estado,
-        'estado_choices': Return.ESTADO_CHOICES,
+        'condicion_filter': condicion,
+        'condicion_choices': Return.CONDICION_CHOICES,
         'create_form': ReturnForm(),
         'create_formset': ReturnPhotoFormSet(),
     }
