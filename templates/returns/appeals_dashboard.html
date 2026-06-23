@@ -29,7 +29,7 @@
   </div>
 </div>
 
-<div class="table-wrap" style="margin-bottom:18px">
+<div class="table-wrap returns-table-wrap">
   <div class="table-header">
     <form method="get" class="filter-bar" style="flex:1">
       <div class="search-wrap">
@@ -48,16 +48,11 @@
       {% endif %}
     </form>
   </div>
-</div>
-
-<div class="table-wrap returns-table-wrap">
-  <div class="table-header">
-    <div class="form-section-title" style="margin:0;padding:0;border:0">Apelaciones en seguimiento</div>
-  </div>
 
   {% if apelaciones %}
   <table class="returns-table">
     <colgroup>
+      <col class="col-id">
       <col class="col-date">
       <col class="col-order">
       <col class="col-order">
@@ -69,6 +64,7 @@
     </colgroup>
     <thead>
       <tr>
+        <th>#</th>
         <th>Fecha</th>
         <th>Orden</th>
         <th>Ticket</th>
@@ -82,6 +78,7 @@
     <tbody>
       {% for a in apelaciones %}
       <tr>
+        <td style="color:var(--text-muted)">{{ apelaciones.start_index|add:forloop.counter0 }}</td>
         <td style="color:var(--text-muted)">{{ a.creado_en|date:"d/m/Y" }}</td>
         <td><a href="{% url 'return_detail' a.devolucion.pk %}"><strong>{{ a.devolucion.numero_orden }}</strong></a></td>
         <td>{{ a.numero_apelacion }}</td>

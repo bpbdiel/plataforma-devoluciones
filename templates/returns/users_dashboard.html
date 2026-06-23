@@ -43,7 +43,12 @@
       {{ form.is_staff }}
       <span>Usuario administrador</span>
     </label>
+    <label class="checkbox-label" style="margin-top:8px">
+      {{ form.force_password_change }}
+      <span>Solicitar cambio de contraseña al iniciar sesión</span>
+    </label>
     {% if form.is_staff.errors %}<div class="form-error">{{ form.is_staff.errors.0 }}</div>{% endif %}
+    {% if form.force_password_change.errors %}<div class="form-error">{{ form.force_password_change.errors.0 }}</div>{% endif %}
   </div>
   {% if form.non_field_errors %}<div class="form-error" style="margin-top:12px">{{ form.non_field_errors.0 }}</div>{% endif %}
   <div class="form-actions">
@@ -74,6 +79,7 @@
       <col class="col-product">
       <col class="col-status">
       <col class="col-status">
+      <col class="col-status">
       <col class="col-date">
       <col class="col-actions">
     </colgroup>
@@ -85,6 +91,7 @@
         <th>Email</th>
         <th>Rol</th>
         <th>Estado</th>
+        <th>Contraseña</th>
         <th>Creado</th>
         <th>Acciones</th>
       </tr>
@@ -92,7 +99,7 @@
     <tbody>
       {% for usuario in usuarios %}
       <tr>
-        <td style="color:var(--text-muted)">{{ usuario.id }}</td>
+        <td style="color:var(--text-muted)">{{ usuarios.start_index|add:forloop.counter0 }}</td>
         <td><strong>{{ usuario.username }}</strong></td>
         <td>
           {% if usuario.get_full_name %}
@@ -120,6 +127,13 @@
           <span class="badge badge-green">Activo</span>
           {% else %}
           <span class="badge badge-red">Inactivo</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if usuario.profile.force_password_change %}
+          <span class="badge badge-yellow">Solicitado</span>
+          {% else %}
+          <span class="badge badge-gray">Normal</span>
           {% endif %}
         </td>
         <td style="color:var(--text-muted)">{{ usuario.date_joined|date:"d/m/Y" }}</td>

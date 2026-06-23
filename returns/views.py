@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
-from django.contrib.auth import login, logout, authenticate
+from django.contrib.auth import login, logout, authenticate, update_session_auth_hash
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.models import User
 from django.contrib import messages
@@ -9,8 +9,8 @@ from django.db.models import Q, Count
 from django.http import HttpResponse, JsonResponse
 from django.core.paginator import Paginator
 from django.utils import timezone
-from .models import Appeal, Product, Return, ReturnPhoto
-from .forms import AppealForm, PlatformUserCreationForm, PlatformUserUpdateForm, ReturnForm, ReturnPhotoFormSet
+from .models import Appeal, Product, Return, ReturnPhoto, UserProfile
+from .forms import AppealForm, PlatformPasswordChangeForm, PlatformUserCreationForm, PlatformUserUpdateForm, ReturnForm, ReturnPhotoFormSet
 
 
 def paginate_queryset(request, queryset, page_param='page', per_page=12):
@@ -24,6 +24,13 @@ def querystring_without(request, *keys):
         query.pop(key, None)
     encoded = query.urlencode()
     return f'{encoded}&' if encoded else ''
+
+
+def must_change_password(user):
+    if not user.is_authenticated:
+        return False
+    profile, _ = UserProfile.objects.get_or_create(user=user)
+    return profile.force_password_change
 
 
 def filtered_report_returns(request):
@@ -92,7 +99,7 @@ def report_export_response(devoluciones):
         'Producto',
         'Marca',
         'Categoría',
-        'Precio venta',
+        'Precio venta CLP',
         'Cantidad',
         'Estado devolución',
         'Estado del producto',
@@ -142,7 +149,7 @@ def report_export_response(devoluciones):
                 devolucion.producto_nombre,
                 devolucion.marca,
                 devolucion.categoria,
-                devolucion.precio_venta,
+                int(devolucion.precio_venta) if devolucion.precio_venta is not None else '',
                 devolucion.cantidad,
                 devolucion.get_estado_display(),
                 devolucion.get_condicion_producto_display(),
@@ -188,6 +195,8 @@ def login_view(request):
         if form.is_valid():
             user = form.get_user()
             login(request, user)
+            if must_change_password(user):
+                return redirect('password_change_required')
             return redirect('dashboard')
         else:
             messages.error(request, 'Usuario o contraseña incorrectos.')
@@ -199,6 +208,24 @@ def login_view(request):
 def logout_view(request):
     logout(request)
     return redirect('login')
+
+
+@login_required
+def password_change_required(request):
+    if request.method == 'POST':
+        form = PlatformPasswordChangeForm(request.user, request.POST)
+        if form.is_valid():
+            user = form.save()
+            UserProfile.objects.update_or_create(
+                user=user,
+                defaults={'force_password_change': False},
+            )
+            update_session_auth_hash(request, user)
+            messages.success(request, 'Contraseña actualizada correctamente.')
+            return redirect('dashboard')
+    else:
+        form = PlatformPasswordChangeForm(request.user)
+    return render(request, 'returns/password_change_required.html', {'form': form})
 
 
 @login_required
@@ -459,6 +486,9 @@ def users_dashboard(request):
         form = PlatformUserCreationForm()
 
     q = request.GET.get('q', '').strip()
+    for usuario_existente in User.objects.all().only('id'):
+        UserProfile.objects.get_or_create(user=usuario_existente)
+
     usuarios = User.objects.order_by('-date_joined', 'username')
     if q:
         usuarios = usuarios.filter(

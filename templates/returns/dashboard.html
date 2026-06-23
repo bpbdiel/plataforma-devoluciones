@@ -96,7 +96,7 @@
     <tbody>
       {% for d in devoluciones %}
       <tr>
-        <td style="color:var(--text-muted)">{{ d.id }}</td>
+        <td style="color:var(--text-muted)">{{ devoluciones.start_index|add:forloop.counter0 }}</td>
         <td style="color:var(--text-muted)">{{ d.fecha_ingreso|date:"d/m/Y" }}</td>
         <td><a href="{% url 'return_detail' d.pk %}"><strong>{{ d.numero_orden }}</strong></a></td>
         <td>{{ d.get_seller_display }}</td>

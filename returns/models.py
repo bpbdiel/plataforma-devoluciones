@@ -1,5 +1,5 @@
 from django.db import models
-from django.db.models.signals import post_delete
+from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator
@@ -21,6 +21,18 @@ class Product(models.Model):
 
     def __str__(self):
         return f"{self.sku} - {self.nombre}"
+
+
+class UserProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    force_password_change = models.BooleanField(default=False, verbose_name='Solicitar cambio de contraseña')
+
+    class Meta:
+        verbose_name = 'Perfil de usuario'
+        verbose_name_plural = 'Perfiles de usuario'
+
+    def __str__(self):
+        return f'Perfil de {self.user.username}'
 
 
 class Return(models.Model):
@@ -201,3 +213,8 @@ class Appeal(models.Model):
 def delete_return_photo_file(sender, instance, **kwargs):
     if instance.foto:
         instance.foto.delete(save=False)
+
+
+@receiver(post_save, sender=User)
+def ensure_user_profile(sender, instance, created, **kwargs):
+    UserProfile.objects.get_or_create(user=instance)

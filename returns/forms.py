@@ -1,8 +1,8 @@
 from django import forms
-from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.forms import PasswordChangeForm, UserCreationForm
 from django.contrib.auth.models import User
 from django.db.models import Q
-from .models import Appeal, Return, ReturnPhoto
+from .models import Appeal, Return, ReturnPhoto, UserProfile
 
 
 class ReturnForm(forms.ModelForm):
@@ -30,7 +30,7 @@ class ReturnForm(forms.ModelForm):
             'producto_nombre': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Nombre del producto'}),
             'marca': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Marca'}),
             'categoria': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Categoría'}),
-            'precio_venta': forms.NumberInput(attrs={'class': 'form-input', 'placeholder': '0.00', 'min': '0', 'step': '0.01'}),
+            'precio_venta': forms.NumberInput(attrs={'class': 'form-input money-field', 'placeholder': '0', 'min': '0', 'step': '1', 'inputmode': 'numeric'}),
             'cantidad': forms.NumberInput(attrs={'class': 'form-input', 'min': '1', 'step': '1'}),
             'condicion_producto': forms.Select(attrs={'class': 'form-select'}),
             'grado': forms.Select(attrs={'class': 'form-select'}),
@@ -80,10 +80,16 @@ class PlatformUserCreationForm(UserCreationForm):
         required=False,
         help_text='Permite crear usuarios y acceder al panel de administración de plataforma.',
     )
+    force_password_change = forms.BooleanField(
+        label='Solicitar cambio de contraseña',
+        required=False,
+        initial=True,
+        help_text='El usuario deberá cambiar su contraseña al iniciar sesión.',
+    )
 
     class Meta:
         model = User
-        fields = ['username', 'first_name', 'last_name', 'email', 'password1', 'password2', 'is_staff']
+        fields = ['username', 'first_name', 'last_name', 'email', 'password1', 'password2', 'is_staff', 'force_password_change']
         widgets = {
             'username': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Usuario'}),
         }
@@ -92,6 +98,14 @@ class PlatformUserCreationForm(UserCreationForm):
         super().__init__(*args, **kwargs)
         self.fields['password1'].widget.attrs.update({'class': 'form-input', 'placeholder': 'Contraseña'})
         self.fields['password2'].widget.attrs.update({'class': 'form-input', 'placeholder': 'Confirmar contraseña'})
+
+    def save(self, commit=True):
+        user = super().save(commit=commit)
+        if commit:
+            profile, _ = UserProfile.objects.get_or_create(user=user)
+            profile.force_password_change = self.cleaned_data.get('force_password_change', False)
+            profile.save(update_fields=['force_password_change'])
+        return user
 
 
 class PlatformUserUpdateForm(forms.ModelForm):
@@ -103,16 +117,43 @@ class PlatformUserUpdateForm(forms.ModelForm):
         label='Usuario activo',
         required=False,
     )
+    force_password_change = forms.BooleanField(
+        label='Solicitar cambio de contraseña',
+        required=False,
+        help_text='El usuario deberá cambiar su contraseña al iniciar sesión.',
+    )
 
     class Meta:
         model = User
-        fields = ['username', 'first_name', 'last_name', 'email', 'is_staff', 'is_active']
+        fields = ['username', 'first_name', 'last_name', 'email', 'is_staff', 'is_active', 'force_password_change']
         widgets = {
             'username': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Usuario'}),
             'first_name': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Nombre'}),
             'last_name': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Apellido'}),
             'email': forms.EmailInput(attrs={'class': 'form-input', 'placeholder': 'correo@empresa.cl'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            profile, _ = UserProfile.objects.get_or_create(user=self.instance)
+            self.fields['force_password_change'].initial = profile.force_password_change
+
+    def save(self, commit=True):
+        user = super().save(commit=commit)
+        if commit:
+            profile, _ = UserProfile.objects.get_or_create(user=user)
+            profile.force_password_change = self.cleaned_data.get('force_password_change', False)
+            profile.save(update_fields=['force_password_change'])
+        return user
+
+
+class PlatformPasswordChangeForm(PasswordChangeForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['old_password'].widget.attrs.update({'class': 'form-input', 'placeholder': 'Contraseña actual'})
+        self.fields['new_password1'].widget.attrs.update({'class': 'form-input', 'placeholder': 'Nueva contraseña'})
+        self.fields['new_password2'].widget.attrs.update({'class': 'form-input', 'placeholder': 'Confirmar nueva contraseña'})
 
 
 class ReturnPhotoForm(forms.ModelForm):

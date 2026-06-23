@@ -40,6 +40,10 @@
       {{ form.is_active }}
       <span>Usuario activo</span>
     </label>
+    <label class="checkbox-label">
+      {{ form.force_password_change }}
+      <span>Solicitar cambio de contraseña</span>
+    </label>
   </div>
   {% if form.non_field_errors %}<div class="form-error" style="margin-top:12px">{{ form.non_field_errors.0 }}</div>{% endif %}
   <div class="form-actions">

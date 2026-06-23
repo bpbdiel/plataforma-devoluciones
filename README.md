@@ -105,6 +105,40 @@ DJANGO_ALLOWED_HOSTS=tu-dominio.cl,www.tu-dominio.cl,IP_DEL_SERVIDOR
 DJANGO_CSRF_TRUSTED_ORIGINS=https://tu-dominio.cl,https://www.tu-dominio.cl
 ```
 
+## Levantar con Docker
+
+Construir y levantar la plataforma:
+
+```bash
+docker compose up --build
+```
+
+Entrar en:
+
+```text
+http://localhost:8000/
+```
+
+Crear un usuario administrador dentro del contenedor:
+
+```bash
+docker compose exec web python manage.py createsuperuser
+```
+
+Detener:
+
+```bash
+docker compose down
+```
+
+Los datos quedan persistidos en carpetas locales:
+
+- `data/`: base de datos SQLite.
+- `media/`: archivos subidos.
+- `staticfiles/`: archivos estaticos recolectados.
+
+Para usar variables propias en Docker, puedes crear un `.env` en la misma carpeta que `docker-compose.yml`.
+
 ## Despliegue
 
 La guia completa para servidor esta en:
