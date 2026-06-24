@@ -1,0 +1,35 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Inicio</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url 'admin:returns_siteconfiguration_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; Eliminar datos de trabajo
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <div class="module" style="padding: 16px;">
+    <h2>Confirmar eliminación</h2>
+    <p>Esta acción eliminará los datos de trabajo de la plataforma:</p>
+    <ul>
+      <li><strong>{{ returns_count }}</strong> devoluciones</li>
+      <li><strong>{{ appeals_count }}</strong> apelaciones</li>
+      <li><strong>{{ photos_count }}</strong> fotos registradas</li>
+    </ul>
+    <p>No se eliminarán productos, usuarios, perfiles ni configuración.</p>
+    <p><strong>Esta acción no se puede deshacer.</strong> Exporta un backup antes si necesitas conservar los datos.</p>
+  </div>
+
+  <form method="post">
+    {% csrf_token %}
+    <div class="submit-row">
+      <input type="submit" value="Sí, eliminar datos de trabajo" class="deletelink" style="height: 35px; padding: 8px 15px;">
+      <a href="{% url 'admin:returns_full_backup_export' %}" class="button">Exportar backup antes</a>
+      <a href="{% url 'admin:returns_siteconfiguration_changelist' %}" class="button cancel-link">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

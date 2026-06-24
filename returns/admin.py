@@ -1,21 +1,179 @@
 from django.contrib import admin
 from django import forms
+from django.conf import settings
+from django.core.management import call_command
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import path
+from django.utils import timezone
+from io import StringIO
+from pathlib import Path
+import json
+import tempfile
+import zipfile
 from .models import Appeal, Product, Return, ReturnPhoto, SiteConfiguration
+
+
+class FullBackupImportForm(forms.Form):
+    archivo = forms.FileField(
+        label='Archivo backup ZIP',
+        help_text='Sube un backup .zip generado desde esta misma herramienta.',
+    )
+
+    def clean_archivo(self):
+        archivo = self.cleaned_data['archivo']
+        if not archivo.name.lower().endswith('.zip'):
+            raise forms.ValidationError('Sube un archivo .zip de backup.')
+        return archivo
 
 
 @admin.register(SiteConfiguration)
 class SiteConfigurationAdmin(admin.ModelAdmin):
     fields = ['timezone', 'actualizado_en']
     readonly_fields = ['actualizado_en']
+    change_list_template = 'admin/returns/siteconfiguration/change_list.html'
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                'backup/',
+                self.admin_site.admin_view(self.backup_view),
+                name='returns_full_backup',
+            ),
+            path(
+                'backup/exportar/',
+                self.admin_site.admin_view(self.export_backup_view),
+                name='returns_full_backup_export',
+            ),
+            path(
+                'limpiar-datos/',
+                self.admin_site.admin_view(self.clear_work_data_view),
+                name='returns_clear_work_data',
+            ),
+        ]
+        return custom_urls + urls
 
     def has_add_permission(self, request):
         return not SiteConfiguration.objects.exists()
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+    def backup_view(self, request):
+        if request.method == 'POST':
+            form = FullBackupImportForm(request.POST, request.FILES)
+            if form.is_valid():
+                try:
+                    self.import_backup(form.cleaned_data['archivo'])
+                except (KeyError, ValueError, zipfile.BadZipFile) as error:
+                    self.message_user(request, f'No se pudo importar el backup: {error}', level='ERROR')
+                    return redirect('admin:returns_full_backup')
+
+                self.message_user(request, 'Backup importado correctamente.')
+                return redirect('admin:returns_full_backup')
+        else:
+            form = FullBackupImportForm()
+
+        return render(
+            request,
+            'admin/returns/siteconfiguration/backup.html',
+            {
+                'form': form,
+                'title': 'Backup completo',
+                'opts': self.model._meta,
+            },
+        )
+
+    def export_backup_view(self, request):
+        timestamp = timezone.localtime().strftime('%Y%m%d_%H%M%S')
+        response = HttpResponse(content_type='application/zip')
+        response['Content-Disposition'] = f'attachment; filename="backup_devoluciones_{timestamp}.zip"'
+
+        data_output = StringIO()
+        call_command(
+            'dumpdata',
+            'auth.User',
+            'auth.Group',
+            'returns',
+            format='json',
+            indent=2,
+            stdout=data_output,
+        )
+        manifest = {
+            'created_at': timezone.localtime().isoformat(),
+            'format': 'devoluciones-full-backup-v1',
+            'contains': ['data.json', 'media/'],
+        }
+
+        media_root = Path(settings.MEDIA_ROOT)
+        with zipfile.ZipFile(response, mode='w', compression=zipfile.ZIP_DEFLATED) as backup_zip:
+            backup_zip.writestr('manifest.json', json.dumps(manifest, ensure_ascii=False, indent=2))
+            backup_zip.writestr('data.json', data_output.getvalue())
+            if media_root.exists():
+                for path in media_root.rglob('*'):
+                    if path.is_file():
+                        backup_zip.write(path, Path('media') / path.relative_to(media_root))
+
+        return response
+
+    def import_backup(self, archivo):
+        media_root = Path(settings.MEDIA_ROOT)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            with zipfile.ZipFile(archivo) as backup_zip:
+                names = backup_zip.namelist()
+                if 'data.json' not in names:
+                    raise ValueError('el ZIP no contiene data.json')
+
+                for member in names:
+                    target = temp_path / member
+                    if not str(target.resolve()).startswith(str(temp_path.resolve())):
+                        raise ValueError('el ZIP contiene rutas no permitidas')
+                backup_zip.extractall(temp_path)
+
+            call_command('loaddata', str(temp_path / 'data.json'))
+
+            extracted_media = temp_path / 'media'
+            if extracted_media.exists():
+                media_root.mkdir(parents=True, exist_ok=True)
+                for source in extracted_media.rglob('*'):
+                    if source.is_file():
+                        target = media_root / source.relative_to(extracted_media)
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        target.write_bytes(source.read_bytes())
+
+    def clear_work_data_view(self, request):
+        if request.method == 'POST':
+            counts = {
+                'devoluciones': Return.objects.count(),
+                'apelaciones': Appeal.objects.count(),
+                'fotos': ReturnPhoto.objects.count(),
+            }
+            Return.objects.all().delete()
+            self.message_user(
+                request,
+                (
+                    'Datos de trabajo eliminados: '
+                    f"{counts['devoluciones']} devoluciones, "
+                    f"{counts['apelaciones']} apelaciones, "
+                    f"{counts['fotos']} fotos."
+                ),
+            )
+            return redirect('admin:returns_siteconfiguration_changelist')
+
+        return render(
+            request,
+            'admin/returns/siteconfiguration/clear_work_data.html',
+            {
+                'title': 'Eliminar datos de trabajo',
+                'opts': self.model._meta,
+                'returns_count': Return.objects.count(),
+                'appeals_count': Appeal.objects.count(),
+                'photos_count': ReturnPhoto.objects.count(),
+                'products_count': Product.objects.count(),
+            },
+        )
 
 
 class ProductImportForm(forms.Form):
