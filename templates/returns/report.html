@@ -4,76 +4,99 @@
 {% block topbar_title %}Reporte{% endblock %}
 
 {% block content %}
-<div class="table-wrap" style="margin-bottom:18px">
-  <div class="table-header">
-    <form method="get" class="filter-bar" style="flex:1">
-      {% if period %}<input type="hidden" name="period" value="{{ period }}">{% endif %}
-      <div class="search-wrap">
+<section class="report-panel">
+  <form method="get" class="report-form">
+    {% if period %}<input type="hidden" name="period" value="{{ period }}">{% endif %}
+    <div class="report-toolbar">
+      <div class="search-wrap report-search">
         <span class="search-icon">⌕</span>
-        <input type="text" name="q" value="{{ q }}" placeholder="Buscar orden, ticket, SKU, producto, marca...">
+        <input type="text" name="q" value="{{ q }}" placeholder="Buscar orden, ticket, SKU, producto o marca">
       </div>
-      <div class="period-filter-bar">
-        <a href="?{{ period_query }}" class="btn btn-sm {% if not period %}btn-primary{% else %}btn-ghost{% endif %}">Todo</a>
-        <a href="?{{ period_query }}period=month" class="btn btn-sm {% if period == 'month' %}btn-primary{% else %}btn-ghost{% endif %}">Mes</a>
-        <a href="?{{ period_query }}period=week" class="btn btn-sm {% if period == 'week' %}btn-primary{% else %}btn-ghost{% endif %}">Semana</a>
-        <a href="?{{ period_query }}period=today" class="btn btn-sm {% if period == 'today' %}btn-primary{% else %}btn-ghost{% endif %}">Día</a>
-      </div>
-      <input type="date" name="fecha_desde" value="{{ fecha_desde }}" class="form-input" style="width:auto" title="Desde">
-      <input type="date" name="fecha_hasta" value="{{ fecha_hasta }}" class="form-input" style="width:auto" title="Hasta">
-      <select name="seller" class="form-select" style="width:auto">
-        <option value="">Todos los sellers</option>
-        {% for val, label in seller_choices %}
-        <option value="{{ val }}" {% if seller_filter == val %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
-      <select name="estado" class="form-select" style="width:auto">
-        <option value="">Estados devolución</option>
-        {% for val, label in estado_choices %}
-        <option value="{{ val }}" {% if estado_filter == val %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
-      <select name="condicion" class="form-select" style="width:auto">
-        <option value="">Estados producto</option>
-        {% for val, label in condicion_choices %}
-        <option value="{{ val }}" {% if condicion_filter == val %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
-      <select name="grado" class="form-select" style="width:auto">
-        <option value="">Todos los grados</option>
-        {% for val, label in grado_choices %}
-        <option value="{{ val }}" {% if grado_filter == val %}selected{% endif %}>Grado {{ label }}</option>
-        {% endfor %}
-      </select>
-      <select name="apelacion" class="form-select" style="width:auto">
-        <option value="">Con o sin apelación</option>
-        <option value="con" {% if apelacion_filter == 'con' %}selected{% endif %}>Con apelación</option>
-        <option value="sin" {% if apelacion_filter == 'sin' %}selected{% endif %}>Sin apelación</option>
-      </select>
-      <select name="appeal_status" class="form-select" style="width:auto">
-        <option value="">Status apelación</option>
-        {% for val, label in appeal_status_choices %}
-        <option value="{{ val }}" {% if appeal_status_filter == val %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
       <button type="submit" class="btn btn-ghost">Filtrar</button>
       <button type="submit" name="export" value="xlsx" class="btn btn-primary">Exportar Excel</button>
       {% if q or fecha_desde or fecha_hasta or seller_filter or estado_filter or condicion_filter or grado_filter or apelacion_filter or appeal_status_filter or period %}
-      <a href="{% url 'report_dashboard' %}" class="btn btn-ghost">✕ Limpiar</a>
+      <a href="{% url 'report_dashboard' %}" class="btn btn-ghost">Limpiar</a>
       {% endif %}
-    </form>
-  </div>
-</div>
+    </div>
 
-<div class="stats-grid">
-  <div class="stat-card">
-    <div class="stat-value" style="color:var(--text)">{{ total_filtrado }}</div>
-    <div class="stat-label">Registros filtrados</div>
+    <div class="period-filter-bar report-periods">
+      <a href="?{{ period_query }}period=all" class="btn btn-sm {% if not period %}btn-primary{% else %}btn-ghost{% endif %}">Todo</a>
+      <a href="?{{ period_query }}period=year" class="btn btn-sm {% if period == 'year' %}btn-primary{% else %}btn-ghost{% endif %}">Año</a>
+      <a href="?{{ period_query }}period=month" class="btn btn-sm {% if period == 'month' %}btn-primary{% else %}btn-ghost{% endif %}">Mes</a>
+      <a href="?{{ period_query }}period=week" class="btn btn-sm {% if period == 'week' %}btn-primary{% else %}btn-ghost{% endif %}">Semana</a>
+      <a href="?{{ period_query }}period=today" class="btn btn-sm {% if period == 'today' %}btn-primary{% else %}btn-ghost{% endif %}">Día</a>
+    </div>
+
+    <details class="report-advanced" {% if fecha_desde or fecha_hasta or seller_filter or estado_filter or condicion_filter or grado_filter or apelacion_filter or appeal_status_filter %}open{% endif %}>
+      <summary>Filtros avanzados</summary>
+      <div class="report-filter-grid">
+        <input type="date" name="fecha_desde" value="{{ fecha_desde }}" class="form-input" title="Desde">
+        <input type="date" name="fecha_hasta" value="{{ fecha_hasta }}" class="form-input" title="Hasta">
+        <select name="seller" class="form-select">
+          <option value="">Todos los sellers</option>
+          {% for val, label in seller_choices %}
+          <option value="{{ val }}" {% if seller_filter == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <select name="estado" class="form-select">
+          <option value="">Estados devolución</option>
+          {% for val, label in estado_choices %}
+          <option value="{{ val }}" {% if estado_filter == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <select name="condicion" class="form-select">
+          <option value="">Estados producto</option>
+          {% for val, label in condicion_choices %}
+          <option value="{{ val }}" {% if condicion_filter == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <select name="grado" class="form-select">
+          <option value="">Todos los grados</option>
+          {% for val, label in grado_choices %}
+          <option value="{{ val }}" {% if grado_filter == val %}selected{% endif %}>Grado {{ label }}</option>
+          {% endfor %}
+        </select>
+        <select name="apelacion" class="form-select">
+          <option value="">Con o sin apelación</option>
+          <option value="con" {% if apelacion_filter == 'con' %}selected{% endif %}>Con apelación</option>
+          <option value="sin" {% if apelacion_filter == 'sin' %}selected{% endif %}>Sin apelación</option>
+        </select>
+        <select name="appeal_status" class="form-select">
+          <option value="">Status apelación</option>
+          {% for val, label in appeal_status_choices %}
+          <option value="{{ val }}" {% if appeal_status_filter == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </details>
+  </form>
+</section>
+
+<section class="report-summary">
+  <div class="report-metric primary">
+    <span>Registros</span>
+    <strong>{{ total_filtrado }}</strong>
   </div>
-</div>
+  <div class="report-metric">
+    <span>Valor devoluciones</span>
+    <strong>{{ total_valorizado_display }}</strong>
+  </div>
+  <div class="report-metric">
+    <span>Total pagado</span>
+    <strong style="color:var(--green)">{{ total_pagado_display }}</strong>
+  </div>
+  <div class="report-metric">
+    <span>Con apelación</span>
+    <strong>{{ con_apelacion }}</strong>
+  </div>
+</section>
 
 <div class="table-wrap returns-table-wrap">
   <div class="table-header">
-    <div class="form-section-title" style="margin:0;padding:0;border:0">Vista previa del reporte</div>
+    <div>
+      <div class="form-section-title" style="margin:0;padding:0;border:0">Vista previa</div>
+      <div class="report-preview-subtitle">El Excel exporta el detalle completo del informe.</div>
+    </div>
   </div>
 
   {% if devoluciones %}
@@ -86,12 +109,9 @@
       <col class="col-sku">
       <col class="col-product">
       <col class="col-status">
-      <col class="col-product-status">
-      <col class="col-grade">
       <col class="col-appeal">
       <col class="col-product-status">
       <col class="col-product-status">
-      <col class="col-photos">
     </colgroup>
     <thead>
       <tr>
@@ -102,12 +122,9 @@
         <th>SKU</th>
         <th>Producto</th>
         <th>Estado</th>
-        <th>Estado producto</th>
-        <th>Grado</th>
         <th>Apelación</th>
         <th>Status apelación</th>
         <th>Diferencia</th>
-        <th>Fotos</th>
       </tr>
     </thead>
     <tbody>
@@ -126,12 +143,6 @@
           {% endif %}
         </td>
         <td><span class="badge badge-{{ d.get_estado_color }}">{{ d.get_estado_display }}</span></td>
-        <td>
-          <span class="badge badge-{% if d.condicion_producto == 'nuevo' %}green{% elif d.condicion_producto == 'caja_danada' or d.condicion_producto == 'dano_estetico' %}yellow{% else %}red{% endif %}">
-            {{ d.get_condicion_producto_display }}
-          </span>
-        </td>
-        <td><span class="badge badge-gray">{{ d.grado }}</span></td>
         <td>
           {% with apelacion=d.apelaciones.first %}
           {% if apelacion %}
@@ -152,16 +163,15 @@
         </td>
         <td>
           {% with apelacion=d.apelaciones.first %}
-          {% if apelacion and d.precio_venta != None and apelacion.estado_cuenta %}
-          <div class="table-product-name" title="Precio: {{ d.precio_venta|clp }} · Pagado: {{ apelacion.estado_cuenta|clp }}">
-            {{ d.precio_venta|clp_difference:apelacion.estado_cuenta }}
+          {% if apelacion and apelacion.diferencia_pagada != None %}
+          <div class="table-product-name" title="Costo total: {{ d.valor_total|clp }} · Pagado: {{ apelacion.estado_cuenta|clp }}">
+            {{ apelacion.diferencia_pagada|clp }}
           </div>
           {% else %}
           <span style="color:var(--text-muted)">—</span>
           {% endif %}
           {% endwith %}
         </td>
-        <td style="color:var(--text-muted)">{{ d.fotos.count }}</td>
       </tr>
       {% endfor %}
     </tbody>

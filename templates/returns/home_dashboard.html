@@ -9,6 +9,7 @@
     <div class="chart-total">{{ period_label }}</div>
   </div>
   <div class="dashboard-period-actions">
+    <a href="{% url 'dashboard' %}?period=year" class="btn btn-sm {% if period == 'year' %}btn-primary{% else %}btn-ghost{% endif %}">Año actual</a>
     <a href="{% url 'dashboard' %}?period=month" class="btn btn-sm {% if period == 'month' %}btn-primary{% else %}btn-ghost{% endif %}">Mes actual</a>
     <a href="{% url 'dashboard' %}?period=week" class="btn btn-sm {% if period == 'week' %}btn-primary{% else %}btn-ghost{% endif %}">Esta semana</a>
     <a href="{% url 'dashboard' %}?period=today" class="btn btn-sm {% if period == 'today' %}btn-primary{% else %}btn-ghost{% endif %}">Hoy</a>
@@ -20,6 +21,29 @@
     <button type="submit" class="btn btn-sm {% if period == 'custom' %}btn-primary{% else %}btn-ghost{% endif %}">Personalizado</button>
   </form>
 </div>
+
+<section class="executive-summary">
+  <div class="executive-card primary">
+    <div class="executive-label">Valor devoluciones</div>
+    <div class="executive-value">{{ total_valor_devoluciones_display }}</div>
+    <div class="executive-note">{{ total_devoluciones }} devoluciones en el periodo</div>
+  </div>
+  <div class="executive-card">
+    <div class="executive-label">Total pagado</div>
+    <div class="executive-value" style="color:var(--green)">{{ total_pagado_apelaciones_display }}</div>
+    <div class="executive-note">{{ apelaciones_pagadas }} apelaciones creadas en el periodo</div>
+  </div>
+  <div class="executive-card">
+    <div class="executive-label">Pérdida estimada</div>
+    <div class="executive-value" style="color:{% if perdida_estimada_apelaciones > 0 %}var(--red){% else %}var(--green){% endif %}">{{ perdida_estimada_apelaciones_display }}</div>
+    <div class="executive-note">Sobre apelaciones pagadas</div>
+  </div>
+  <div class="executive-card">
+    <div class="executive-label">Tasa de pago</div>
+    <div class="executive-value">{{ tasa_pago_apelaciones }}%</div>
+    <div class="executive-note">Sobre {{ total_apelaciones }} apelaciones creadas</div>
+  </div>
+</section>
 
 <div class="dashboard-grid">
   <section class="chart-card">
@@ -72,21 +96,69 @@
         {% endfor %}
       </div>
     </div>
-    <div class="chart-summary-row">
-      <span>Total pagado</span>
-      <strong>{{ total_pagado_apelaciones_display }}</strong>
-    </div>
-    <div class="chart-summary-row chart-summary-row-tight">
-      <span>Pérdida estimada</span>
-      <strong style="color:{% if perdida_estimada_apelaciones > 0 %}var(--red){% else %}var(--green){% endif %}">{{ perdida_estimada_apelaciones_display }}</strong>
+    <div class="chart-finance-strip">
+      <div class="chart-finance-item">
+        <span>Total pagado</span>
+        <strong style="color:var(--green)">{{ total_pagado_apelaciones_display }}</strong>
+      </div>
+      <div class="chart-finance-item">
+        <span>Pérdida estimada</span>
+        <strong style="color:{% if perdida_estimada_apelaciones > 0 %}var(--red){% else %}var(--green){% endif %}">{{ perdida_estimada_apelaciones_display }}</strong>
+      </div>
     </div>
   </section>
 </div>
 
 <section class="chart-card chart-card-wide">
   <div class="chart-card-header">
+    <div>
+      <div class="chart-title">Dinero recuperado vs costo por canal</div>
+      <div class="chart-total">Costo de devoluciones y recuperaciones de apelaciones del periodo</div>
+    </div>
+    <div class="chart-total">{{ period_label }}</div>
+  </div>
+  {% if channel_chart %}
+  <div class="channel-bars-chart">
+    {% for item in channel_chart %}
+    <div class="channel-bars-column">
+      <div class="channel-bars-pair">
+        <div class="channel-bar-metric">
+          <div class="channel-bar-value">{{ item.cost_compact }}</div>
+          <div class="channel-bar-track" title="Costo: {{ item.cost_display }}">
+            <span class="channel-bar-fill cost" style="height:{{ item.cost_percent }}%"></span>
+          </div>
+          <div class="channel-bar-label">Costo</div>
+        </div>
+        <div class="channel-bar-metric">
+          <div class="channel-bar-value">{{ item.returned_compact }}</div>
+          <div class="channel-bar-track" title="Recuperado: {{ item.returned_display }}">
+            <span class="channel-bar-fill returned" style="height:{{ item.returned_percent }}%"></span>
+          </div>
+          <div class="channel-bar-label">Recuperado</div>
+        </div>
+      </div>
+      <div class="channel-bars-name">{{ item.label }}</div>
+      <div class="channel-bars-rate">{{ item.recovery_label }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="channel-legend">
+    <span><i class="cost"></i> Costo total</span>
+    <span><i class="returned"></i> Recuperado</span>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon">▥</div>
+    <div class="empty-title">Sin devoluciones por canal</div>
+    <div class="empty-sub">Cuando existan devoluciones en el periodo, aquí verás el costo y dinero devuelto por canal.</div>
+  </div>
+  {% endif %}
+</section>
+
+<section class="chart-card chart-card-wide">
+  <div class="chart-card-header">
     <div class="chart-title">Categorías con más devoluciones</div>
-    <div class="chart-total">{{ total_devoluciones }} devoluciones reales</div>
+    <div class="chart-total">{{ total_devoluciones }} registros de devolución</div>
   </div>
   {% if category_chart %}
   <div class="category-ranking">

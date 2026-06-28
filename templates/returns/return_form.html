@@ -9,9 +9,9 @@
 {% url 'returns_dashboard' as dashboard_url %}
 {% if action == 'Editar' %}
   {% url 'return_edit' devolucion.pk as form_action_url %}
-  {% include 'returns/_return_form.html' with form=form formset=formset action_url=form_action_url submit_label='💾 Guardar cambios' cancel_href=dashboard_url %}
+  {% include 'returns/_return_form.html' with form=form photo_form=photo_form action_url=form_action_url submit_label='💾 Guardar cambios' cancel_href=dashboard_url %}
 {% else %}
   {% url 'return_create' as form_action_url %}
-  {% include 'returns/_return_form.html' with form=form formset=formset action_url=form_action_url submit_label='✓ Crear devolución' cancel_href=dashboard_url %}
+  {% include 'returns/_return_form.html' with form=form photo_form=photo_form action_url=form_action_url submit_label='✓ Crear devolución' cancel_href=dashboard_url %}
 {% endif %}
 {% endblock %}

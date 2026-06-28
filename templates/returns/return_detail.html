@@ -87,10 +87,19 @@
     </div>
 
     <!-- Damage details -->
-    {% if devolucion.detalles_dano %}
+    {% if devolucion.sub_danos or devolucion.detalles_dano %}
     <div class="detail-card">
       <div class="detail-card-title">Detalles del daño</div>
+      {% if devolucion.sub_danos %}
+      <div class="detail-badge-list" style="margin-bottom:{% if devolucion.detalles_dano %}14px{% else %}0{% endif %}">
+        {% for sub_dano in devolucion.get_sub_danos_display %}
+        <span class="badge badge-gray">{{ sub_dano }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if devolucion.detalles_dano %}
       <p style="font-size:13.5px;color:var(--text-dim);line-height:1.7">{{ devolucion.detalles_dano|linebreaksbr }}</p>
+      {% endif %}
     </div>
     {% endif %}
   </div>
@@ -111,7 +120,7 @@
         <span class="detail-key">Ticket</span>
         <span class="detail-val">{{ apelacion.numero_apelacion }}</span>
       </div>
-      {% if apelacion.estado_cuenta %}
+      {% if apelacion.status == 'pagado' and apelacion.estado_cuenta %}
       <div class="detail-row">
         <span class="detail-key">Monto apelación</span>
         <span class="detail-val">${{ apelacion.estado_cuenta }} CLP</span>

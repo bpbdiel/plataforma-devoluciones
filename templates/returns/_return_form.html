@@ -82,6 +82,13 @@
   <!-- Daño -->
   <div class="form-card">
     <div class="form-section-title">Descripción</div>
+    <div class="form-group" style="margin-bottom:16px">
+      <label>Sub daños preestablecidos</label>
+      <div class="checkbox-grid">
+        {{ form.sub_danos }}
+      </div>
+      {% if form.sub_danos.errors %}<div class="form-error">{{ form.sub_danos.errors.0 }}</div>{% endif %}
+    </div>
     <div class="form-group" style="margin-bottom:14px">
       <label>Detalles del daño o motivo de devolución</label>
       {{ form.detalles_dano }}
@@ -91,36 +98,27 @@
   <!-- Fotos -->
   <div class="form-card">
     <div class="form-section-title">Fotos del producto</div>
-    {{ formset.management_form }}
-    {% for photo_form in formset %}
-    <div class="formset-item">
-      <div class="formset-header">
-        <span class="formset-label">Foto {{ forloop.counter }}</span>
-        {% if photo_form.instance.pk %}
-        <label class="checkbox-label">
-          {{ photo_form.DELETE }} Eliminar esta foto
+    {% if devolucion and devolucion.fotos.exists %}
+    <div class="photos-grid" style="margin-bottom:14px">
+      {% for foto in devolucion.fotos.all %}
+      <div class="photo-item">
+        <a href="{{ foto.foto.url }}" target="_blank">
+          <img src="{{ foto.foto.url }}" alt="Foto {{ forloop.counter }}">
+        </a>
+        <label class="checkbox-label" style="padding:8px 10px">
+          <input type="checkbox" name="delete_photos" value="{{ foto.pk }}">
+          Eliminar
         </label>
-        {% endif %}
       </div>
-      <div class="form-grid">
-        <div class="form-group">
-          <label>Archivo</label>
-          {{ photo_form.foto }}
-          {% if photo_form.instance.foto %}
-          <div style="margin-top:6px">
-            <img src="{{ photo_form.instance.foto.url }}" style="height:60px;border-radius:6px;object-fit:cover">
-          </div>
-          {% endif %}
-        </div>
-        <div class="form-group">
-          <label>Descripción</label>
-          {{ photo_form.descripcion }}
-        </div>
-      </div>
-      {{ photo_form.id }}
+      {% endfor %}
     </div>
-    {% endfor %}
-    <p style="font-size:12px;color:var(--text-muted);margin-top:6px">Puedes subir hasta 10 fotos (JPG, PNG, WEBP)</p>
+    {% endif %}
+    <div class="form-group">
+      <label for="{{ photo_form.fotos.id_for_label }}">Seleccionar fotos</label>
+      {{ photo_form.fotos }}
+      {% if photo_form.fotos.errors %}<div class="form-error">{{ photo_form.fotos.errors.0 }}</div>{% endif %}
+    </div>
+    <p style="font-size:12px;color:var(--text-muted);margin-top:6px">Puedes seleccionar varias fotos a la vez (JPG, PNG, WEBP).</p>
   </div>
 
   <div class="action-row">
@@ -199,6 +197,7 @@
         caja_danada: 'C',
         danado: 'D',
         dano_estetico: 'C',
+        extraviado: 'E',
       };
 
       function updateGrado() {

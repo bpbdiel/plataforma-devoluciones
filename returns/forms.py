@@ -2,10 +2,17 @@ from django import forms
 from django.contrib.auth.forms import PasswordChangeForm, UserCreationForm
 from django.contrib.auth.models import User
 from django.db.models import Q
-from .models import Appeal, Return, ReturnPhoto, UserProfile
+from .models import Appeal, Return, UserProfile
 
 
 class ReturnForm(forms.ModelForm):
+    sub_danos = forms.MultipleChoiceField(
+        label='Sub daños',
+        choices=Return.SUB_DANO_CHOICES,
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+    )
+
     class Meta:
         model = Return
         fields = [
@@ -20,6 +27,7 @@ class ReturnForm(forms.ModelForm):
             'cantidad',
             'condicion_producto',
             'grado',
+            'sub_danos',
             'detalles_dano',
         ]
         widgets = {
@@ -46,6 +54,8 @@ class ReturnForm(forms.ModelForm):
         self.fields['grado'].initial = grado
         self.fields['grado'].disabled = True
         self.fields['grado'].widget.attrs['data-grado-producto'] = ''
+        if not self.is_bound and self.instance and self.instance.pk:
+            self.fields['sub_danos'].initial = self.instance.sub_danos or []
 
     def save(self, commit=True):
         is_new = self.instance.pk is None
@@ -53,6 +63,7 @@ class ReturnForm(forms.ModelForm):
         if is_new:
             instance.estado = 'recibido'
         instance.grado = Return.grado_for_condicion(instance.condicion_producto)
+        instance.sub_danos = self.cleaned_data.get('sub_danos', [])
         if commit:
             instance.save()
             self.save_m2m()
@@ -156,23 +167,30 @@ class PlatformPasswordChangeForm(PasswordChangeForm):
         self.fields['new_password2'].widget.attrs.update({'class': 'form-input', 'placeholder': 'Confirmar nueva contraseña'})
 
 
-class ReturnPhotoForm(forms.ModelForm):
-    class Meta:
-        model = ReturnPhoto
-        fields = ['foto', 'descripcion']
-        widgets = {
-            'descripcion': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Descripción breve (opcional)'}),
-            'foto': forms.FileInput(attrs={'class': 'form-file', 'accept': 'image/*'}),
-        }
+class MultipleFileInput(forms.ClearableFileInput):
+    allow_multiple_selected = True
 
 
-ReturnPhotoFormSet = forms.inlineformset_factory(
-    Return, ReturnPhoto,
-    form=ReturnPhotoForm,
-    extra=3,
-    can_delete=True,
-    max_num=10,
-)
+class MultipleImageField(forms.ImageField):
+    widget = MultipleFileInput
+
+    def clean(self, data, initial=None):
+        if not data:
+            return []
+        files = data if isinstance(data, (list, tuple)) else [data]
+        return [super(MultipleImageField, self).clean(file, initial) for file in files]
+
+
+class ReturnPhotoUploadForm(forms.Form):
+    fotos = MultipleImageField(
+        label='Fotos',
+        required=False,
+        widget=MultipleFileInput(attrs={
+            'class': 'form-file',
+            'accept': 'image/*',
+            'multiple': True,
+        }),
+    )
 
 
 class AppealForm(forms.ModelForm):

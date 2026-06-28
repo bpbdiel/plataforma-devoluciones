@@ -114,6 +114,7 @@ class ReturnFormTests(TestCase):
             'caja_danada': 'C',
             'danado': 'D',
             'dano_estetico': 'C',
+            'extraviado': 'E',
         }
 
         for condicion, grado in cases.items():
@@ -127,6 +128,122 @@ class ReturnFormTests(TestCase):
                 devolucion = form.save()
 
                 self.assertEqual(devolucion.grado, grado)
+
+    def test_sub_danos_are_saved_from_form(self):
+        form = ReturnForm(data=self.form_data(
+            numero_orden='ORD-SUB-DANOS',
+            sub_danos=['rayado', 'sin_accesorios', 'producto_cambiado'],
+        ))
+
+        self.assertTrue(form.is_valid(), form.errors)
+        devolucion = form.save()
+
+        self.assertEqual(devolucion.sub_danos, ['rayado', 'sin_accesorios', 'producto_cambiado'])
+        self.assertEqual(
+            devolucion.get_sub_danos_display_text(),
+            'Rayado, Sin Accesorios, Producto Cambiado (Cambiazo o Robo)',
+        )
+
+
+@override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+class ReturnPhotoUploadViewTests(TestCase):
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(TEST_MEDIA_ROOT, ignore_errors=True)
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='uploader', password='secret')
+        self.client.force_login(self.user)
+
+    def image_file(self, name):
+        return SimpleUploadedFile(
+            name,
+            (
+                b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00'
+                b'\x00\x00\x00\xff\xff\xff\x21\xf9\x04\x01\x00\x00\x00'
+                b'\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02'
+                b'\x44\x01\x00\x3b'
+            ),
+            content_type='image/gif',
+        )
+
+    def return_data(self, **overrides):
+        data = {
+            'seller': 'falabella',
+            'numero_orden': 'ORD-UPLOAD-001',
+            'sku': 'SKU-UPLOAD-001',
+            'ean': '',
+            'producto_nombre': 'Producto con fotos',
+            'marca': '',
+            'categoria': '',
+            'precio_venta': '',
+            'cantidad': '1',
+            'condicion_producto': 'nuevo',
+            'grado': 'A',
+            'detalles_dano': '',
+        }
+        data.update(overrides)
+        return data
+
+    def test_create_return_accepts_multiple_photos(self):
+        response = self.client.post(reverse('return_create'), {
+            **self.return_data(),
+            'fotos': [
+                self.image_file('foto-1.gif'),
+                self.image_file('foto-2.gif'),
+            ],
+        })
+
+        devolucion = Return.objects.get(numero_orden='ORD-UPLOAD-001')
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(devolucion.fotos.count(), 2)
+        self.assertEqual(
+            list(devolucion.fotos.order_by('id').values_list('foto', flat=True)),
+            [
+                'devoluciones/ord-upload-001-1.gif',
+                'devoluciones/ord-upload-001-2.gif',
+            ],
+        )
+
+    def test_edit_return_adds_multiple_photos_and_deletes_selected_photos(self):
+        devolucion = Return.objects.create(
+            seller='falabella',
+            numero_orden='ORD-UPLOAD-EDIT',
+            sku='SKU-UPLOAD-EDIT',
+            producto_nombre='Producto editable',
+            creado_por=self.user,
+        )
+        old_photo = ReturnPhoto.objects.create(
+            devolucion=devolucion,
+            foto=self.image_file('foto-antigua.gif'),
+        )
+
+        response = self.client.post(reverse('return_edit', args=[devolucion.pk]), {
+            **self.return_data(
+                numero_orden=devolucion.numero_orden,
+                sku=devolucion.sku,
+            ),
+            'delete_photos': [str(old_photo.pk)],
+            'fotos': [
+                self.image_file('foto-nueva-1.gif'),
+                self.image_file('foto-nueva-2.gif'),
+            ],
+        })
+
+        devolucion.refresh_from_db()
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(ReturnPhoto.objects.filter(pk=old_photo.pk).exists())
+        self.assertEqual(devolucion.fotos.count(), 2)
+        self.assertEqual(
+            list(devolucion.fotos.order_by('id').values_list('foto', flat=True)),
+            [
+                'devoluciones/ord-upload-edit-1.gif',
+                'devoluciones/ord-upload-edit-2.gif',
+            ],
+        )
 
 
 class AppealFormTests(TestCase):
@@ -243,3 +360,18 @@ class AppealFormTests(TestCase):
 
         self.assertEqual(apelacion.status, 'proceso_pago')
         self.assertEqual(apelacion.estado_cuenta, '25990')
+
+    def test_paid_difference_uses_total_return_value(self):
+        self.devolucion.precio_venta = '10000'
+        self.devolucion.cantidad = 3
+        self.devolucion.save()
+        apelacion = Appeal.objects.create(
+            devolucion=self.devolucion,
+            numero_apelacion='TICKET-DIFF',
+            detalle='Pago parcial.',
+            status='pagado',
+            estado_cuenta='25000',
+        )
+
+        self.assertEqual(apelacion.devolucion.valor_total, 30000)
+        self.assertEqual(apelacion.diferencia_pagada, 5000)

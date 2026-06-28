@@ -1,8 +1,12 @@
+from pathlib import Path
+from decimal import Decimal, InvalidOperation
+
 from django.db import models
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator
+from django.utils.text import slugify
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
@@ -111,12 +115,28 @@ class Return(models.Model):
         ('caja_danada', 'Caja Dañada'),
         ('danado', 'Dañado'),
         ('dano_estetico', 'Daño Estetico'),
+        ('extraviado', 'Extraviado'),
     ]
 
     GRADO_CHOICES = [
         ('A', 'A'),
         ('C', 'C'),
         ('D', 'D'),
+        ('E', 'Extraviado'),
+    ]
+
+    SUB_DANO_CHOICES = [
+        ('producto_bloqueado', 'Producto Bloqueado'),
+        ('no_funciona', 'No funciona'),
+        ('rayado', 'Rayado'),
+        ('usado', 'Usado'),
+        ('abollado', 'Abollado'),
+        ('sin_accesorios', 'Sin Accesorios'),
+        ('sin_embalaje_original', 'Sin Embalaje original'),
+        ('embalaje_danado', 'Embalaje dañado'),
+        ('pantalla_rota', 'Pantalla Rota'),
+        ('numero_serie_no_corresponde', 'N° de serie no corresponde'),
+        ('producto_cambiado', 'Producto Cambiado (Cambiazo o Robo)'),
     ]
 
     # Datos principales
@@ -138,6 +158,7 @@ class Return(models.Model):
     grado = models.CharField(max_length=1, choices=GRADO_CHOICES, default='A', verbose_name='Grado')
 
     # Detalles del daño
+    sub_danos = models.JSONField(default=list, blank=True, verbose_name='Sub daños')
     detalles_dano = models.TextField(blank=True, verbose_name='Detalles del daño')
     notas_internas = models.TextField(blank=True, verbose_name='Notas internas')
 
@@ -159,12 +180,20 @@ class Return(models.Model):
             'caja_danada': 'C',
             'danado': 'D',
             'dano_estetico': 'C',
+            'extraviado': 'E',
         }
         return grados.get(condicion_producto, 'A')
 
     def save(self, *args, **kwargs):
         self.grado = self.grado_for_condicion(self.condicion_producto)
         super().save(*args, **kwargs)
+
+    def get_sub_danos_display(self):
+        labels = dict(self.SUB_DANO_CHOICES)
+        return [labels.get(sub_dano, sub_dano) for sub_dano in (self.sub_danos or [])]
+
+    def get_sub_danos_display_text(self):
+        return ', '.join(self.get_sub_danos_display())
 
     def get_estado_color(self):
         colors = {
@@ -177,10 +206,29 @@ class Return(models.Model):
         }
         return colors.get(self.estado, 'gray')
 
+    @property
+    def valor_total(self):
+        if self.precio_venta is None:
+            return None
+        try:
+            precio_venta = Decimal(str(self.precio_venta))
+        except InvalidOperation:
+            return None
+        return precio_venta * self.cantidad
+
+
+def return_photo_upload_to(instance, filename):
+    extension = Path(filename).suffix.lower() or '.jpg'
+    order_code = slugify(instance.devolucion.numero_orden or f'devolucion-{instance.devolucion_id}')
+    if not order_code:
+        order_code = f'devolucion-{instance.devolucion_id or "sin-orden"}'
+    photo_number = instance.devolucion.fotos.count() + 1 if instance.devolucion_id else 1
+    return f'devoluciones/{order_code}-{photo_number}{extension}'
+
 
 class ReturnPhoto(models.Model):
     devolucion = models.ForeignKey(Return, on_delete=models.CASCADE, related_name='fotos')
-    foto = models.ImageField(upload_to='devoluciones/%Y/%m/', verbose_name='Foto')
+    foto = models.ImageField(upload_to=return_photo_upload_to, verbose_name='Foto')
     descripcion = models.CharField(max_length=200, blank=True, verbose_name='Descripción')
     subida_en = models.DateTimeField(auto_now_add=True)
 
@@ -226,6 +274,25 @@ class Appeal(models.Model):
             'pagado': 'green',
         }
         return colors.get(self.status, 'gray')
+
+    @property
+    def monto_pagado(self):
+        if not self.estado_cuenta:
+            return None
+        try:
+            return Decimal(str(self.estado_cuenta))
+        except InvalidOperation:
+            return None
+
+    @property
+    def diferencia_pagada(self):
+        if self.status != 'pagado':
+            return None
+        monto_pagado = self.monto_pagado
+        valor_total = self.devolucion.valor_total
+        if monto_pagado is None or valor_total is None:
+            return None
+        return valor_total - monto_pagado
 
     @property
     def checklist_flujo(self):

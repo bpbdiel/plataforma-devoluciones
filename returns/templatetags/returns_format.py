@@ -14,7 +14,8 @@ def clp(value):
         amount = int(Decimal(str(value)))
     except (InvalidOperation, ValueError):
         return value
-    return f'${amount:,}'.replace(',', '.') + ' CLP'
+    sign = '-' if amount < 0 else ''
+    return f'{sign}${abs(amount):,}'.replace(',', '.') + ' CLP'
 
 
 @register.filter

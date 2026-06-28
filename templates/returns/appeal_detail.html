@@ -1,4 +1,5 @@
 {% extends 'returns/base.html' %}
+{% load returns_format %}
 {% block title %}Apelación {{ apelacion.numero_apelacion }}{% endblock %}
 {% block topbar_title %}Apelación {{ apelacion.numero_apelacion }}{% endblock %}
 {% block topbar_actions %}
@@ -14,8 +15,8 @@
       <span class="badge badge-{{ apelacion.get_status_color }}" style="font-size:13px;padding:5px 14px">
         {{ apelacion.get_status_display }}
       </span>
-      {% if apelacion.estado_cuenta %}
-      <span style="color:var(--text-muted);font-size:13px">${{ apelacion.estado_cuenta }} CLP</span>
+      {% if apelacion.status == 'pagado' and apelacion.estado_cuenta %}
+      <span style="color:var(--text-muted);font-size:13px">{{ apelacion.estado_cuenta|clp }}</span>
       {% endif %}
     </div>
 
@@ -41,10 +42,18 @@
         <span class="detail-key">Actualizada por</span>
         <span class="detail-val">{% if apelacion.actualizado_por %}{{ apelacion.actualizado_por.username }}{% else %}—{% endif %}</span>
       </div>
-      {% if apelacion.estado_cuenta %}
+      {% if apelacion.status == 'pagado' and apelacion.estado_cuenta %}
       <div class="detail-row">
         <span class="detail-key">Monto apelación</span>
-        <span class="detail-val">${{ apelacion.estado_cuenta }} CLP</span>
+        <span class="detail-val">{{ apelacion.estado_cuenta|clp }}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-key">Costo devolución</span>
+        <span class="detail-val">{{ apelacion.devolucion.valor_total|clp }}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-key">Diferencia</span>
+        <span class="detail-val">{{ apelacion.diferencia_pagada|clp }}</span>
       </div>
       {% endif %}
     </div>

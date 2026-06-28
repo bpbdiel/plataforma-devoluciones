@@ -11,7 +11,7 @@ from django.http import HttpResponse, JsonResponse
 from django.core.paginator import Paginator
 from django.utils import timezone
 from .models import Appeal, Product, Return, ReturnPhoto, UserProfile
-from .forms import AppealForm, PlatformPasswordChangeForm, PlatformUserCreationForm, PlatformUserUpdateForm, ReturnForm, ReturnPhotoFormSet
+from .forms import AppealForm, PlatformPasswordChangeForm, PlatformUserCreationForm, PlatformUserUpdateForm, ReturnForm, ReturnPhotoUploadForm
 
 
 def paginate_queryset(request, queryset, page_param='page', per_page=12):
@@ -29,14 +29,18 @@ def querystring_without(request, *keys):
 
 def period_dates(request):
     today = timezone.localdate()
-    period = request.GET.get('period', '')
+    period = request.GET.get('period', 'month')
 
+    if period == 'all':
+        return '', None, None
     if period == 'today':
         return period, today, today
     if period == 'week':
         return period, today - timedelta(days=today.weekday()), today
     if period == 'month':
         return period, today.replace(day=1), today
+    if period == 'year':
+        return period, today.replace(month=1, day=1), today
     return period, None, None
 
 
@@ -132,6 +136,7 @@ def report_export_response(devoluciones):
         'Estado devolución',
         'Estado del producto',
         'Grado',
+        'Sub daños',
         'Detalles del daño',
         'Notas internas',
         'Fotos',
@@ -167,12 +172,7 @@ def report_export_response(devoluciones):
             apelaciones = [None]
 
         for apelacion in apelaciones:
-            diferencia = ''
-            if apelacion and devolucion.precio_venta is not None and apelacion.estado_cuenta:
-                try:
-                    diferencia = int(devolucion.precio_venta) - int(apelacion.estado_cuenta)
-                except (TypeError, ValueError):
-                    diferencia = ''
+            diferencia = apelacion.diferencia_pagada if apelacion else None
             ws.append([
                 devolucion.id,
                 devolucion.fecha_ingreso,
@@ -189,6 +189,7 @@ def report_export_response(devoluciones):
                 devolucion.get_estado_display(),
                 devolucion.get_condicion_producto_display(),
                 devolucion.grado,
+                devolucion.get_sub_danos_display_text(),
                 devolucion.detalles_dano,
                 devolucion.notas_internas,
                 devolucion.fotos.count(),
@@ -198,8 +199,8 @@ def report_export_response(devoluciones):
                 apelacion.numero_apelacion if apelacion else '',
                 apelacion.detalle if apelacion else '',
                 apelacion.get_status_display() if apelacion else '',
-                apelacion.estado_cuenta if apelacion else '',
-                diferencia,
+                apelacion.estado_cuenta if apelacion and apelacion.status == 'pagado' else '',
+                int(diferencia) if diferencia is not None else '',
                 apelacion.creado_por.username if apelacion and apelacion.creado_por else '',
                 apelacion.actualizado_por.username if apelacion and apelacion.actualizado_por else '',
                 timezone.localtime(apelacion.creado_en).strftime('%d/%m/%Y %H:%M') if apelacion else '',
@@ -301,6 +302,10 @@ def dashboard(request):
         start_date = today - timedelta(days=today.weekday())
         end_date = today
         period_label = 'Esta semana'
+    elif period == 'year':
+        start_date = today.replace(month=1, day=1)
+        end_date = today
+        period_label = 'Año actual'
     elif period == 'custom':
         start_date = fecha_desde or None
         end_date = fecha_hasta or None
@@ -337,6 +342,15 @@ def dashboard(request):
     def clp_format(value):
         return f'${value:,.0f}'.replace(',', '.') + ' CLP'
 
+    def clp_compact(value):
+        value = int(value or 0)
+        if abs(value) >= 1_000_000:
+            compact = value / 1_000_000
+            return f'${compact:.1f}M'.replace('.0M', 'M')
+        if abs(value) >= 1_000:
+            return f'${round(value / 1_000):.0f}K'
+        return f'${value}'
+
     grado_counts = {
         grado: devoluciones_qs.filter(grado=grado).count()
         for grado, _ in Return.GRADO_CHOICES
@@ -347,20 +361,27 @@ def dashboard(request):
     }
     total_devoluciones = devoluciones_qs.count()
     total_apelaciones = apelaciones_qs.count()
+    total_valor_devoluciones = sum(
+        devolucion.precio_venta * devolucion.cantidad
+        for devolucion in devoluciones_qs.exclude(precio_venta__isnull=True)
+    )
+    apelaciones_pagadas = status_counts.get('pagado', 0)
+    tasa_pago_apelaciones = round((apelaciones_pagadas / total_apelaciones) * 100) if total_apelaciones else 0
     total_pagado_apelaciones = sum(
         int(apelacion.estado_cuenta)
         for apelacion in apelaciones_qs.filter(status='pagado').only('estado_cuenta')
         if apelacion.estado_cuenta and apelacion.estado_cuenta.isdigit()
     )
     costo_devoluciones_pagadas = 0
-    for apelacion in apelaciones_qs.filter(status='pagado').select_related('devolucion').only('estado_cuenta', 'devolucion__precio_venta'):
-        if apelacion.estado_cuenta and apelacion.estado_cuenta.isdigit() and apelacion.devolucion.precio_venta is not None:
-            costo_devoluciones_pagadas += int(apelacion.devolucion.precio_venta)
+    for apelacion in apelaciones_qs.filter(status='pagado').select_related('devolucion').only('estado_cuenta', 'devolucion__precio_venta', 'devolucion__cantidad'):
+        if apelacion.monto_pagado is not None and apelacion.devolucion.valor_total is not None:
+            costo_devoluciones_pagadas += int(apelacion.devolucion.valor_total)
     perdida_estimada_apelaciones = max(costo_devoluciones_pagadas - total_pagado_apelaciones, 0)
     grado_colors = {
         'A': 'var(--green)',
         'C': 'var(--yellow)',
         'D': 'var(--red)',
+        'E': 'var(--purple)',
     }
     status_colors = {
         'en_proceso': 'var(--yellow)',
@@ -405,11 +426,57 @@ def dashboard(request):
         }
         for item in raw_category_counts
     ]
+    seller_labels = dict(Return.SELLER_CHOICES)
+    channel_totals = {}
+    for devolucion in devoluciones_qs:
+        channel = channel_totals.setdefault(
+            devolucion.seller,
+            {
+                'label': seller_labels.get(devolucion.seller, devolucion.seller),
+                'cost': 0,
+                'returned': 0,
+            },
+        )
+        if devolucion.precio_venta is not None:
+            channel['cost'] += devolucion.precio_venta * devolucion.cantidad
+
+    for apelacion in apelaciones_qs.filter(status='pagado').select_related('devolucion').only('estado_cuenta', 'devolucion__seller'):
+        if not (apelacion.estado_cuenta and apelacion.estado_cuenta.isdigit()):
+            continue
+        channel = channel_totals.setdefault(
+            apelacion.devolucion.seller,
+            {
+                'label': seller_labels.get(apelacion.devolucion.seller, apelacion.devolucion.seller),
+                'cost': 0,
+                'returned': 0,
+            },
+        )
+        channel['returned'] += int(apelacion.estado_cuenta)
+
+    max_channel_amount = max(
+        (max(item['cost'], item['returned']) for item in channel_totals.values()),
+        default=0,
+    )
+    channel_chart = [
+        {
+            'label': item['label'],
+            'cost_display': clp_format(item['cost']),
+            'cost_compact': clp_compact(item['cost']),
+            'returned_display': clp_format(item['returned']),
+            'returned_compact': clp_compact(item['returned']),
+            'cost_percent': round((item['cost'] / max_channel_amount) * 100) if max_channel_amount else 0,
+            'returned_percent': round((item['returned'] / max_channel_amount) * 100) if max_channel_amount else 0,
+            'recovery_percent': round((item['returned'] / item['cost']) * 100) if item['cost'] else 0,
+            'recovery_label': f"{round((item['returned'] / item['cost']) * 100)}% recuperado" if item['cost'] else 'Sin costo en periodo',
+        }
+        for item in sorted(channel_totals.values(), key=lambda value: (value['cost'], value['returned']), reverse=True)
+    ]
 
     context = {
         'grado_chart': grado_chart,
         'appeal_chart': appeal_chart,
         'category_chart': category_chart,
+        'channel_chart': channel_chart,
         'grade_donut_gradient': build_donut(
             [(grado, grado_counts[grado]) for grado, _ in Return.GRADO_CHOICES],
             total_devoluciones,
@@ -422,6 +489,9 @@ def dashboard(request):
         ),
         'total_devoluciones': total_devoluciones,
         'total_apelaciones': total_apelaciones,
+        'total_valor_devoluciones_display': clp_format(total_valor_devoluciones),
+        'apelaciones_pagadas': apelaciones_pagadas,
+        'tasa_pago_apelaciones': tasa_pago_apelaciones,
         'total_pagado_apelaciones': total_pagado_apelaciones,
         'total_pagado_apelaciones_display': clp_format(total_pagado_apelaciones),
         'perdida_estimada_apelaciones': perdida_estimada_apelaciones,
@@ -457,13 +527,23 @@ def returns_dashboard(request):
 
     devoluciones_page = paginate_queryset(request, devoluciones, 'page', 12)
 
-    # Stats
+    def clp_format(value):
+        return f'${value:,.0f}'.replace(',', '.') + ' CLP'
+
+    devoluciones_con_precio = devoluciones.exclude(precio_venta__isnull=True)
+    total_valorizado = sum(
+        devolucion.precio_venta * devolucion.cantidad
+        for devolucion in devoluciones_con_precio
+    )
+
     stats = {
         'total': devoluciones.count(),
         'nuevo': devoluciones.filter(condicion_producto='nuevo').count(),
         'caja_danada': devoluciones.filter(condicion_producto='caja_danada').count(),
         'danado': devoluciones.filter(condicion_producto='danado').count(),
         'dano_estetico': devoluciones.filter(condicion_producto='dano_estetico').count(),
+        'extraviado': devoluciones.filter(condicion_producto='extraviado').count(),
+        'total_valorizado_display': clp_format(total_valorizado),
     }
 
     context = {
@@ -477,7 +557,7 @@ def returns_dashboard(request):
         'condicion_filter': condicion,
         'condicion_choices': Return.CONDICION_CHOICES,
         'create_form': ReturnForm(),
-        'create_formset': ReturnPhotoFormSet(),
+        'create_photo_form': ReturnPhotoUploadForm(),
     }
     return render(request, 'returns/dashboard.html', context)
 
@@ -516,11 +596,11 @@ def appeals_dashboard(request):
 
     costo_devoluciones_con_pago = 0
     total_pagado_apelaciones = 0
-    for apelacion in apelaciones.exclude(estado_cuenta=''):
-        if not apelacion.estado_cuenta.isdigit() or apelacion.devolucion.precio_venta is None:
+    for apelacion in apelaciones.filter(status='pagado').select_related('devolucion').exclude(estado_cuenta=''):
+        if apelacion.monto_pagado is None or apelacion.devolucion.valor_total is None:
             continue
-        costo_devoluciones_con_pago += int(apelacion.devolucion.precio_venta)
-        total_pagado_apelaciones += int(apelacion.estado_cuenta)
+        costo_devoluciones_con_pago += int(apelacion.devolucion.valor_total)
+        total_pagado_apelaciones += int(apelacion.monto_pagado)
 
     diferencia_pagos = costo_devoluciones_con_pago - total_pagado_apelaciones
     perdida_estimada = max(diferencia_pagos, 0)
@@ -573,13 +653,28 @@ def report_dashboard(request):
     devoluciones = filtered_report_returns(request)
     if request.GET.get('export') == 'xlsx':
         return report_export_response(devoluciones)
+    period, _, _ = period_dates(request)
+
+    def clp_format(value):
+        return f'${value:,.0f}'.replace(',', '.') + ' CLP'
+
+    total_valorizado = sum(
+        devolucion.precio_venta * devolucion.cantidad
+        for devolucion in devoluciones.exclude(precio_venta__isnull=True)
+    )
+    total_pagado = 0
+    for devolucion in devoluciones:
+        for apelacion in devolucion.apelaciones.all():
+            if apelacion.estado_cuenta and apelacion.estado_cuenta.isdigit():
+                if apelacion.status == 'pagado':
+                    total_pagado += int(apelacion.estado_cuenta)
 
     devoluciones_page = paginate_queryset(request, devoluciones, 'page', 15)
     context = {
         'devoluciones': devoluciones_page,
         'devoluciones_page': devoluciones_page,
         'devoluciones_page_query': querystring_without(request, 'page'),
-        'period': request.GET.get('period', '').strip(),
+        'period': period,
         'period_query': querystring_without(request, 'period', 'page', 'fecha_desde', 'fecha_hasta'),
         'q': request.GET.get('q', '').strip(),
         'fecha_desde': request.GET.get('fecha_desde', '').strip(),
@@ -596,6 +691,9 @@ def report_dashboard(request):
         'grado_choices': Return.GRADO_CHOICES,
         'appeal_status_choices': Appeal.STATUS_CHOICES,
         'total_filtrado': devoluciones.count(),
+        'total_valorizado_display': clp_format(total_valorizado),
+        'total_pagado_display': clp_format(total_pagado),
+        'con_apelacion': devoluciones.filter(apelaciones__isnull=False).count(),
     }
     return render(request, 'returns/report.html', context)
 
@@ -743,19 +841,19 @@ def appeal_delete(request, pk):
 def return_create(request):
     if request.method == 'POST':
         form = ReturnForm(request.POST)
-        formset = ReturnPhotoFormSet(request.POST, request.FILES)
-        if form.is_valid() and formset.is_valid():
+        photo_form = ReturnPhotoUploadForm(request.POST, request.FILES)
+        if form.is_valid() and photo_form.is_valid():
             devolucion = form.save(commit=False)
             devolucion.creado_por = request.user
             devolucion.save()
-            formset.instance = devolucion
-            formset.save()
+            for foto in photo_form.cleaned_data['fotos']:
+                ReturnPhoto.objects.create(devolucion=devolucion, foto=foto)
             messages.success(request, f'Devolución #{devolucion.id} creada correctamente.')
             return redirect('return_detail', pk=devolucion.pk)
     else:
         form = ReturnForm()
-        formset = ReturnPhotoFormSet()
-    return render(request, 'returns/return_form.html', {'form': form, 'formset': formset, 'action': 'Crear'})
+        photo_form = ReturnPhotoUploadForm()
+    return render(request, 'returns/return_form.html', {'form': form, 'photo_form': photo_form, 'action': 'Crear'})
 
 
 @login_required
@@ -769,16 +867,24 @@ def return_edit(request, pk):
     devolucion = get_object_or_404(Return, pk=pk)
     if request.method == 'POST':
         form = ReturnForm(request.POST, instance=devolucion)
-        formset = ReturnPhotoFormSet(request.POST, request.FILES, instance=devolucion)
-        if form.is_valid() and formset.is_valid():
+        delete_photo_ids = request.POST.getlist('delete_photos')
+        photo_form = ReturnPhotoUploadForm(request.POST, request.FILES)
+        if form.is_valid() and photo_form.is_valid():
             form.save()
-            formset.save()
+            devolucion.fotos.filter(pk__in=delete_photo_ids).delete()
+            for foto in photo_form.cleaned_data['fotos']:
+                ReturnPhoto.objects.create(devolucion=devolucion, foto=foto)
             messages.success(request, 'Devolución actualizada correctamente.')
             return redirect('return_detail', pk=devolucion.pk)
     else:
         form = ReturnForm(instance=devolucion)
-        formset = ReturnPhotoFormSet(instance=devolucion)
-    return render(request, 'returns/return_form.html', {'form': form, 'formset': formset, 'action': 'Editar', 'devolucion': devolucion})
+        photo_form = ReturnPhotoUploadForm()
+    return render(request, 'returns/return_form.html', {
+        'form': form,
+        'photo_form': photo_form,
+        'action': 'Editar',
+        'devolucion': devolucion,
+    })
 
 
 @login_required

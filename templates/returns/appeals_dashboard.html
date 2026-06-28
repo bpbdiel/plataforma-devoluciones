@@ -7,40 +7,58 @@
 {% endblock %}
 
 {% block content %}
-<div class="stats-grid appeals-stats-grid">
-  <div class="stat-card">
-    <div class="stat-value" style="color:var(--text)">{{ stats.total }}</div>
-    <div class="stat-label">Total</div>
+<section class="appeals-summary">
+  <div class="appeals-summary-panel">
+    <div class="summary-section-title">Estado de apelaciones</div>
+    <div class="appeals-count-grid">
+      <div class="appeal-count-card is-total">
+        <div class="appeal-count-value">{{ stats.total }}</div>
+        <div class="appeal-count-label">Total</div>
+      </div>
+      <div class="appeal-count-card">
+        <div class="appeal-count-value" style="color:var(--yellow)">{{ stats.en_proceso }}</div>
+        <div class="appeal-count-label">En proceso</div>
+      </div>
+      <div class="appeal-count-card">
+        <div class="appeal-count-value" style="color:var(--purple)">{{ stats.proceso_pago }}</div>
+        <div class="appeal-count-label">Proceso de pago</div>
+      </div>
+      <div class="appeal-count-card">
+        <div class="appeal-count-value" style="color:var(--green)">{{ stats.pagado }}</div>
+        <div class="appeal-count-label">Pagadas</div>
+      </div>
+      <div class="appeal-count-card">
+        <div class="appeal-count-value" style="color:var(--red)">{{ stats.rechazado }}</div>
+        <div class="appeal-count-label">Rechazadas</div>
+      </div>
+    </div>
   </div>
-  <div class="stat-card">
-    <div class="stat-value" style="color:var(--yellow)">{{ stats.en_proceso }}</div>
-    <div class="stat-label">En proceso</div>
+
+  <div class="appeals-summary-panel appeals-finance-panel">
+    <div class="summary-section-title">Resumen financiero</div>
+    <div class="finance-metric primary">
+      <div>
+        <div class="finance-label">Total pagado</div>
+        <div class="finance-hint">Monto recuperado en apelaciones</div>
+      </div>
+      <div class="finance-value" style="color:var(--green)">{{ stats.total_pagado_apelaciones_display }}</div>
+    </div>
+    <div class="finance-breakdown">
+      <div class="finance-metric">
+        <div class="finance-label">Costo devoluciones</div>
+        <div class="finance-value">{{ stats.costo_devoluciones_con_pago_display }}</div>
+      </div>
+      <div class="finance-metric">
+        <div class="finance-label">Pérdida estimada</div>
+        <div class="finance-value" style="color:{% if stats.perdida_estimada > 0 %}var(--red){% else %}var(--green){% endif %}">{{ stats.perdida_estimada_display }}</div>
+      </div>
+      <div class="finance-metric">
+        <div class="finance-label">Diferencia</div>
+        <div class="finance-value">{{ stats.diferencia_pagos_display }}</div>
+      </div>
+    </div>
   </div>
-  <div class="stat-card">
-    <div class="stat-value" style="color:var(--red)">{{ stats.rechazado }}</div>
-    <div class="stat-label">Rechazadas</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-value" style="color:var(--purple)">{{ stats.proceso_pago }}</div>
-    <div class="stat-label">Proceso de pago</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-value" style="color:var(--green)">{{ stats.pagado }}</div>
-    <div class="stat-label">Pagadas</div>
-  </div>
-  <div class="stat-card stat-card-money">
-    <div class="stat-value stat-value-money" style="color:var(--text)">{{ stats.costo_devoluciones_con_pago_display }}</div>
-    <div class="stat-label">Costo devoluciones</div>
-  </div>
-  <div class="stat-card stat-card-money">
-    <div class="stat-value stat-value-money" style="color:var(--green)">{{ stats.total_pagado_apelaciones_display }}</div>
-    <div class="stat-label">Total pagado</div>
-  </div>
-  <div class="stat-card stat-card-money">
-    <div class="stat-value stat-value-money" style="color:{% if stats.perdida_estimada > 0 %}var(--red){% else %}var(--green){% endif %}">{{ stats.perdida_estimada_display }}</div>
-    <div class="stat-label">Pérdida estimada</div>
-  </div>
-</div>
+</section>
 
 <div class="table-wrap returns-table-wrap">
   <div class="table-header">
@@ -51,7 +69,8 @@
         <input type="text" name="q" value="{{ q }}" placeholder="Buscar por orden, ticket, SKU, producto...">
       </div>
       <div class="period-filter-bar">
-        <a href="?{{ period_query }}" class="btn btn-sm {% if not period %}btn-primary{% else %}btn-ghost{% endif %}">Todo</a>
+        <a href="?{{ period_query }}period=all" class="btn btn-sm {% if not period %}btn-primary{% else %}btn-ghost{% endif %}">Todo</a>
+        <a href="?{{ period_query }}period=year" class="btn btn-sm {% if period == 'year' %}btn-primary{% else %}btn-ghost{% endif %}">Año</a>
         <a href="?{{ period_query }}period=month" class="btn btn-sm {% if period == 'month' %}btn-primary{% else %}btn-ghost{% endif %}">Mes</a>
         <a href="?{{ period_query }}period=week" class="btn btn-sm {% if period == 'week' %}btn-primary{% else %}btn-ghost{% endif %}">Semana</a>
         <a href="?{{ period_query }}period=today" class="btn btn-sm {% if period == 'today' %}btn-primary{% else %}btn-ghost{% endif %}">Día</a>
@@ -116,16 +135,16 @@
           <span class="badge badge-{{ a.get_status_color }}">{{ a.get_status_display }}</span>
         </td>
         <td>
-          {% if a.estado_cuenta %}
+          {% if a.status == 'pagado' and a.estado_cuenta %}
           <div class="table-product-name" title="{{ a.estado_cuenta|clp }}">{{ a.estado_cuenta|clp }}</div>
           {% else %}
           <span style="color:var(--text-muted)">—</span>
           {% endif %}
         </td>
         <td>
-          {% if a.devolucion.precio_venta != None and a.estado_cuenta %}
-          <div class="table-product-name" title="Precio: {{ a.devolucion.precio_venta|clp }} · Pagado: {{ a.estado_cuenta|clp }}">
-            {{ a.devolucion.precio_venta|clp_difference:a.estado_cuenta }}
+          {% if a.diferencia_pagada != None %}
+          <div class="table-product-name" title="Costo total: {{ a.devolucion.valor_total|clp }} · Pagado: {{ a.estado_cuenta|clp }}">
+            {{ a.diferencia_pagada|clp }}
           </div>
           {% else %}
           <span style="color:var(--text-muted)">—</span>

@@ -10,29 +10,48 @@
 {% with estado_colors="recibido:blue en_revision:yellow aprobado:green rechazado:red reembolsado:purple cerrado:gray" %}
 {% endwith %}
 
-<!-- Stats -->
-<div class="stats-grid">
-  <div class="stat-card">
-    <div class="stat-value" style="color:var(--text)">{{ stats.total }}</div>
-    <div class="stat-label">Total</div>
+<section class="returns-summary">
+  <div class="summary-panel">
+    <div class="summary-section-title">Estado de productos</div>
+    <div class="summary-count-grid">
+      <div class="summary-count-card is-total">
+        <div class="summary-count-value">{{ stats.total }}</div>
+        <div class="summary-count-label">Total</div>
+      </div>
+      <div class="summary-count-card">
+        <div class="summary-count-value" style="color:var(--green)">{{ stats.nuevo }}</div>
+        <div class="summary-count-label">Nuevo</div>
+      </div>
+      <div class="summary-count-card">
+        <div class="summary-count-value" style="color:var(--yellow)">{{ stats.caja_danada }}</div>
+        <div class="summary-count-label">Caja dañada</div>
+      </div>
+      <div class="summary-count-card">
+        <div class="summary-count-value" style="color:var(--yellow)">{{ stats.dano_estetico }}</div>
+        <div class="summary-count-label">Daño estético</div>
+      </div>
+      <div class="summary-count-card">
+        <div class="summary-count-value" style="color:var(--red)">{{ stats.danado }}</div>
+        <div class="summary-count-label">Dañado</div>
+      </div>
+      <div class="summary-count-card">
+        <div class="summary-count-value" style="color:var(--purple)">{{ stats.extraviado }}</div>
+        <div class="summary-count-label">Extraviado</div>
+      </div>
+    </div>
   </div>
-  <div class="stat-card">
-    <div class="stat-value" style="color:var(--green)">{{ stats.nuevo }}</div>
-    <div class="stat-label">Nuevo</div>
+
+  <div class="summary-panel summary-finance-panel">
+    <div class="summary-section-title">Resumen financiero</div>
+    <div class="finance-metric primary">
+      <div>
+        <div class="finance-label">Valor devoluciones</div>
+        <div class="finance-hint">Precio de venta por cantidad</div>
+      </div>
+      <div class="finance-value">{{ stats.total_valorizado_display }}</div>
+    </div>
   </div>
-  <div class="stat-card">
-    <div class="stat-value" style="color:var(--yellow)">{{ stats.caja_danada }}</div>
-    <div class="stat-label">Caja Dañada</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-value" style="color:var(--red)">{{ stats.danado }}</div>
-    <div class="stat-label">Dañado</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-value" style="color:var(--yellow)">{{ stats.dano_estetico }}</div>
-    <div class="stat-label">Daño Estetico</div>
-  </div>
-</div>
+</section>
 
 <!-- Table -->
 <div class="table-wrap returns-table-wrap">
@@ -44,7 +63,8 @@
         <input type="text" name="q" value="{{ q }}" placeholder="Buscar por orden, seller, SKU, EAN, marca...">
       </div>
       <div class="period-filter-bar">
-        <a href="?{{ period_query }}" class="btn btn-sm {% if not period %}btn-primary{% else %}btn-ghost{% endif %}">Todo</a>
+        <a href="?{{ period_query }}period=all" class="btn btn-sm {% if not period %}btn-primary{% else %}btn-ghost{% endif %}">Todo</a>
+        <a href="?{{ period_query }}period=year" class="btn btn-sm {% if period == 'year' %}btn-primary{% else %}btn-ghost{% endif %}">Año</a>
         <a href="?{{ period_query }}period=month" class="btn btn-sm {% if period == 'month' %}btn-primary{% else %}btn-ghost{% endif %}">Mes</a>
         <a href="?{{ period_query }}period=week" class="btn btn-sm {% if period == 'week' %}btn-primary{% else %}btn-ghost{% endif %}">Semana</a>
         <a href="?{{ period_query }}period=today" class="btn btn-sm {% if period == 'today' %}btn-primary{% else %}btn-ghost{% endif %}">Día</a>
@@ -118,7 +138,7 @@
           </span>
         </td>
         <td>
-          <span class="badge badge-{% if d.condicion_producto == 'nuevo' %}green{% elif d.condicion_producto == 'caja_danada' or d.condicion_producto == 'dano_estetico' %}yellow{% else %}red{% endif %}">
+          <span class="badge badge-{% if d.condicion_producto == 'nuevo' %}green{% elif d.condicion_producto == 'caja_danada' or d.condicion_producto == 'dano_estetico' %}yellow{% elif d.condicion_producto == 'extraviado' %}purple{% else %}red{% endif %}">
             {{ d.get_condicion_producto_display }}
           </span>
         </td>
@@ -174,7 +194,7 @@
     </div>
     <div class="modal-body">
       {% url 'return_create' as create_action_url %}
-      {% include 'returns/_return_form.html' with form=create_form formset=create_formset action_url=create_action_url submit_label='✓ Crear devolución' %}
+      {% include 'returns/_return_form.html' with form=create_form photo_form=create_photo_form action_url=create_action_url submit_label='✓ Crear devolución' %}
     </div>
   </div>
 </div>
