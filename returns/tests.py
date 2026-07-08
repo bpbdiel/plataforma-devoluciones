@@ -1,5 +1,6 @@
 import shutil
 import tempfile
+from io import BytesIO
 
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -7,7 +8,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .forms import AppealForm, ReturnForm
-from .models import Appeal, Return, ReturnPhoto
+from .models import Appeal, Product, Return, ReturnPhoto
 
 
 TEST_MEDIA_ROOT = tempfile.mkdtemp()
@@ -143,6 +144,132 @@ class ReturnFormTests(TestCase):
             devolucion.get_sub_danos_display_text(),
             'Rayado, Sin Accesorios, Producto Cambiado (Cambiazo o Robo)',
         )
+
+    def test_ingresado_bodega_is_saved_from_form(self):
+        form = ReturnForm(data=self.form_data(
+            numero_orden='ORD-BODEGA',
+            ingresado_bodega='on',
+        ))
+
+        self.assertTrue(form.is_valid(), form.errors)
+        devolucion = form.save()
+
+        self.assertTrue(devolucion.ingresado_bodega)
+
+
+class ProductLookupTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='lookup', password='secret')
+        self.client.force_login(self.user)
+        self.product = Product.objects.create(
+            sku='SKU-LOOKUP-001',
+            ean='7800000000001',
+            nombre='Producto lookup',
+            marca='Marca lookup',
+            categoria='Categoria lookup',
+        )
+
+    def test_lookup_product_by_sku_returns_product_data(self):
+        response = self.client.get(reverse('product_lookup_by_ean'), {'q': 'sku-lookup-001'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {
+            'found': True,
+            'product': {
+                'ean': self.product.ean,
+                'sku': self.product.sku,
+                'nombre': self.product.nombre,
+                'marca': self.product.marca,
+                'categoria': self.product.categoria,
+            },
+        })
+
+    def test_lookup_product_by_ean_returns_product_data(self):
+        response = self.client.get(reverse('product_lookup_by_ean'), {'q': self.product.ean})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['product']['sku'], self.product.sku)
+
+    def test_lookup_product_keeps_legacy_ean_parameter(self):
+        response = self.client.get(reverse('product_lookup_by_ean'), {'ean': self.product.ean})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['product']['nombre'], self.product.nombre)
+
+    def test_lookup_product_returns_404_for_unknown_identifier(self):
+        response = self.client.get(reverse('product_lookup_by_ean'), {'q': 'NO-EXISTE'})
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(response.json()['found'])
+
+
+class AdminExcelImportTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_superuser(username='admin', password='secret')
+        self.client.force_login(self.user)
+
+    def excel_file(self, name, rows):
+        from openpyxl import Workbook
+
+        workbook = Workbook()
+        sheet = workbook.active
+        for row in rows:
+            sheet.append(row)
+        output = BytesIO()
+        workbook.save(output)
+        workbook.close()
+        output.seek(0)
+        return SimpleUploadedFile(
+            name,
+            output.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+
+    def test_admin_imports_returns_from_excel(self):
+        Product.objects.create(
+            sku='SKU-IMPORT-001',
+            ean='7800000000100',
+            nombre='Producto importado',
+            marca='Marca importada',
+            categoria='Categoria importada',
+        )
+        archivo = self.excel_file('devoluciones.xlsx', [
+            ['numero_orden', 'seller', 'sku', 'precio_venta', 'cantidad', 'ingresado_bodega', 'condicion_producto'],
+            ['ORD-IMPORT-001', 'Falabella', 'SKU-IMPORT-001', '29990', '2', 'si', 'Caja Dañada'],
+        ])
+
+        response = self.client.post(reverse('admin:returns_return_import_excel'), {'archivo': archivo})
+        devolucion = Return.objects.get(numero_orden='ORD-IMPORT-001')
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(devolucion.seller, 'falabella')
+        self.assertEqual(devolucion.ean, '7800000000100')
+        self.assertEqual(devolucion.producto_nombre, 'Producto importado')
+        self.assertEqual(devolucion.cantidad, 2)
+        self.assertTrue(devolucion.ingresado_bodega)
+        self.assertEqual(devolucion.condicion_producto, 'caja_danada')
+        self.assertEqual(devolucion.grado, 'C')
+
+    def test_admin_imports_appeals_from_excel(self):
+        devolucion = Return.objects.create(
+            seller='falabella',
+            numero_orden='ORD-APPEAL-IMPORT',
+            sku='SKU-APPEAL-IMPORT',
+            producto_nombre='Producto con apelacion',
+        )
+        archivo = self.excel_file('apelaciones.xlsx', [
+            ['numero_orden', 'numero_apelacion', 'detalle', 'status', 'estado_cuenta'],
+            ['ORD-APPEAL-IMPORT', 'TICKET-IMPORT-001', 'Detalle importado', 'Pagado', '15990'],
+        ])
+
+        response = self.client.post(reverse('admin:returns_appeal_import_excel'), {'archivo': archivo})
+        apelacion = Appeal.objects.get(devolucion=devolucion, numero_apelacion='TICKET-IMPORT-001')
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(apelacion.detalle, 'Detalle importado')
+        self.assertEqual(apelacion.status, 'pagado')
+        self.assertEqual(apelacion.estado_cuenta, '15990')
+        self.assertEqual(apelacion.creado_por, self.user)
 
 
 @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)

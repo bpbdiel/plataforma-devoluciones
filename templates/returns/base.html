@@ -510,7 +510,7 @@
     }
     .executive-summary {
       display: grid;
-      grid-template-columns: minmax(260px, 1.4fr) repeat(3, minmax(180px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       gap: 14px;
       margin-bottom: 18px;
     }
@@ -529,6 +529,7 @@
       background: var(--text);
       border-color: var(--text);
       color: var(--bg);
+      grid-column: span 2;
     }
     .executive-label {
       font-size: 12px;
@@ -1180,6 +1181,81 @@
       font-weight: 750;
       text-align: center;
     }
+    .warehouse-card {
+      min-height: 0;
+      margin-bottom: 14px;
+    }
+    .warehouse-seller-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 8px;
+      padding: 12px;
+    }
+    .warehouse-seller-row {
+      display: grid;
+      gap: 7px;
+      padding: 10px;
+      border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--surface2) 42%, transparent);
+    }
+    .warehouse-seller-head,
+    .warehouse-seller-metrics {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .warehouse-seller-name {
+      color: var(--text);
+      font-size: 12.5px;
+      font-weight: 800;
+    }
+    .warehouse-seller-total,
+    .warehouse-seller-metrics {
+      color: var(--text-muted);
+      font-size: 10.5px;
+      font-weight: 700;
+    }
+    .warehouse-seller-metrics span {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .warehouse-seller-metrics i {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      display: inline-block;
+    }
+    .warehouse-seller-metrics i.is-entered {
+      background: var(--green);
+    }
+    .warehouse-seller-metrics i.is-pending {
+      background: var(--yellow);
+    }
+    .warehouse-seller-metrics strong {
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+    .warehouse-stacked-bar {
+      display: flex;
+      height: 7px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: var(--gray-soft);
+    }
+    .warehouse-stacked-fill {
+      min-width: 0;
+      height: 100%;
+    }
+    .warehouse-stacked-fill.is-entered {
+      background: var(--green);
+    }
+    .warehouse-stacked-fill.is-pending {
+      background: var(--yellow);
+    }
     .bar-row {
       display: grid;
       grid-template-columns: 118px 1fr 44px;
@@ -1405,6 +1481,7 @@
     .returns-table .col-status { width: 94px; }
     .returns-table .col-product-status { width: 130px; }
     .returns-table .col-grade { width: 54px; }
+    .returns-table .col-warehouse { width: 92px; }
     .returns-table .col-appeal { width: 116px; }
     .returns-table .col-photos { width: 54px; }
     .returns-table .col-actions { width: 110px; }
@@ -2002,6 +2079,9 @@
       .topbar-actions .btn {
         flex: 1 1 auto;
         justify-content: center;
+      }
+      .executive-card.primary {
+        grid-column: auto;
       }
       .action-row {
         flex-direction: column-reverse;

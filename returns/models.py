@@ -151,6 +151,7 @@ class Return(models.Model):
     categoria = models.CharField(max_length=150, blank=True, verbose_name='Categoría')
     precio_venta = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)], verbose_name='Precio de venta')
     cantidad = models.PositiveIntegerField(default=1, validators=[MinValueValidator(1)], verbose_name='Cantidad')
+    ingresado_bodega = models.BooleanField(default=False, verbose_name='Ingresado a bodega')
 
     # Estado
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='recibido', verbose_name='Estado')

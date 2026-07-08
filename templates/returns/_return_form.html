@@ -25,9 +25,9 @@
         <div class="input-action">
           {{ form.ean }}
           <button type="button" class="btn btn-ghost btn-scan-ean" data-scan-ean>Escanear</button>
-          <button type="button" class="btn btn-ghost btn-scan-ean" data-lookup-ean>Buscar</button>
+          <button type="button" class="btn btn-ghost btn-scan-ean" data-lookup-product>Buscar</button>
         </div>
-        <div class="scan-status" data-ean-status></div>
+        <div class="scan-status" data-product-status></div>
         {% if form.ean.errors %}<div class="form-error">{{ form.ean.errors.0 }}</div>{% endif %}
       </div>
       <div class="form-group">
@@ -58,6 +58,14 @@
         <label>Cantidad</label>
         {{ form.cantidad }}
         {% if form.cantidad.errors %}<div class="form-error">{{ form.cantidad.errors.0 }}</div>{% endif %}
+      </div>
+      <div class="form-group">
+        <label>Ingreso a bodega</label>
+        <label class="checkbox-label" style="min-height:42px">
+          {{ form.ingresado_bodega }}
+          Ingresado a bodega
+        </label>
+        {% if form.ingresado_bodega.errors %}<div class="form-error">{{ form.ingresado_bodega.errors.0 }}</div>{% endif %}
       </div>
     </div>
   </div>
@@ -136,7 +144,7 @@
 <script>
   (function () {
     function setStatus(form, message, type) {
-      const status = form.querySelector('[data-ean-status]');
+      const status = form.querySelector('[data-product-status]');
       if (!status) return;
       status.textContent = message || '';
       status.className = 'scan-status';
@@ -148,21 +156,34 @@
       if (field) field.value = value || '';
     }
 
-    async function lookupProduct(form) {
+    async function lookupProduct(form, sourceName) {
+      const skuField = form.querySelector('[name="sku"]');
       const eanField = form.querySelector('[name="ean"]');
       const lookupUrl = form.dataset.productLookupUrl;
-      const ean = eanField ? eanField.value.trim() : '';
+      const sourceField = sourceName === 'ean' ? eanField : skuField;
+      const fallbackField = sourceName === 'ean' ? skuField : eanField;
+      const query = (
+        sourceName && sourceField && sourceField.value.trim()
+          ? sourceField.value.trim()
+          : skuField && skuField.value.trim()
+            ? skuField.value.trim()
+            : eanField && eanField.value.trim()
+              ? eanField.value.trim()
+              : fallbackField && fallbackField.value.trim()
+                ? fallbackField.value.trim()
+                : ''
+      );
 
-      if (!ean) {
-        setStatus(form, 'Escanea o ingresa un EAN primero.', 'error');
-        if (eanField) eanField.focus();
+      if (!query) {
+        setStatus(form, 'Ingresa o escanea un SKU o EAN primero.', 'error');
+        if (sourceField) sourceField.focus();
         return;
       }
 
       setStatus(form, 'Buscando producto...', 'loading');
 
       try {
-        const response = await fetch(lookupUrl + '?ean=' + encodeURIComponent(ean), {
+        const response = await fetch(lookupUrl + '?q=' + encodeURIComponent(query), {
           headers: { 'X-Requested-With': 'XMLHttpRequest' },
         });
         const data = await response.json();
@@ -187,11 +208,12 @@
       if (form.dataset.eanLookupReady) return;
       form.dataset.eanLookupReady = 'true';
 
+      const skuField = form.querySelector('[name="sku"]');
       const eanField = form.querySelector('[name="ean"]');
       const condicionField = form.querySelector('[name="condicion_producto"]');
       const gradoField = form.querySelector('[data-grado-producto]');
       const scanButton = form.querySelector('[data-scan-ean]');
-      const lookupButton = form.querySelector('[data-lookup-ean]');
+      const lookupButton = form.querySelector('[data-lookup-product]');
       const gradoByCondicion = {
         nuevo: 'A',
         caja_danada: 'C',
@@ -222,11 +244,20 @@
         lookupButton.addEventListener('click', () => lookupProduct(form));
       }
 
+      if (skuField) {
+        skuField.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            lookupProduct(form, 'sku');
+          }
+        });
+      }
+
       if (eanField) {
         eanField.addEventListener('keydown', (event) => {
           if (event.key === 'Enter') {
             event.preventDefault();
-            lookupProduct(form);
+            lookupProduct(form, 'ean');
           }
         });
       }

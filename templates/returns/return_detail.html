@@ -19,6 +19,9 @@
       </span>
       <span style="color:var(--text-muted);font-size:13px">{{ devolucion.get_condicion_producto_display }}</span>
       <span style="color:var(--text-muted);font-size:13px">{{ devolucion.get_grado_display }}</span>
+      <span class="badge badge-{% if devolucion.ingresado_bodega %}green{% else %}gray{% endif %}">
+        {% if devolucion.ingresado_bodega %}Ingresado a bodega{% else %}No ingresado a bodega{% endif %}
+      </span>
     </div>
 
     <!-- Main info -->
@@ -69,6 +72,14 @@
       <div class="detail-row">
         <span class="detail-key">Cantidad</span>
         <span class="detail-val">{{ devolucion.cantidad }}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-key">Bodega</span>
+        <span class="detail-val">
+          <span class="badge badge-{% if devolucion.ingresado_bodega %}green{% else %}gray{% endif %}">
+            {% if devolucion.ingresado_bodega %}Ingresado{% else %}Pendiente{% endif %}
+          </span>
+        </span>
       </div>
       <div class="detail-row">
         <span class="detail-key">Fecha de ingreso</span>

@@ -133,6 +133,7 @@ def report_export_response(devoluciones):
         'Categoría',
         'Precio venta CLP',
         'Cantidad',
+        'Ingresado a bodega',
         'Estado devolución',
         'Estado del producto',
         'Grado',
@@ -186,6 +187,7 @@ def report_export_response(devoluciones):
                 devolucion.categoria,
                 int(devolucion.precio_venta) if devolucion.precio_venta is not None else '',
                 devolucion.cantidad,
+                'Sí' if devolucion.ingresado_bodega else 'No',
                 devolucion.get_estado_display(),
                 devolucion.get_condicion_producto_display(),
                 devolucion.grado,
@@ -267,13 +269,19 @@ def password_change_required(request):
 
 @login_required
 def product_lookup_by_ean(request):
-    ean = request.GET.get('ean', '').strip()
-    if not ean:
-        return JsonResponse({'found': False, 'error': 'Ingresa o escanea un EAN.'}, status=400)
+    query = (
+        request.GET.get('q', '').strip()
+        or request.GET.get('sku', '').strip()
+        or request.GET.get('ean', '').strip()
+    )
+    if not query:
+        return JsonResponse({'found': False, 'error': 'Ingresa o escanea un SKU o EAN.'}, status=400)
 
-    product = Product.objects.filter(ean=ean).first()
+    product = Product.objects.filter(sku__iexact=query).first()
     if not product:
-        return JsonResponse({'found': False, 'error': 'No se encontró un producto con ese EAN.'}, status=404)
+        product = Product.objects.filter(ean__iexact=query).first()
+    if not product:
+        return JsonResponse({'found': False, 'error': 'No se encontró un producto con ese SKU o EAN.'}, status=404)
 
     return JsonResponse({
         'found': True,
@@ -427,6 +435,28 @@ def dashboard(request):
         for item in raw_category_counts
     ]
     seller_labels = dict(Return.SELLER_CHOICES)
+    seller_bodega_counts = (
+        devoluciones_qs.values('seller')
+        .annotate(
+            total=Count('id'),
+            ingresados=Count('id', filter=Q(ingresado_bodega=True)),
+            pendientes=Count('id', filter=Q(ingresado_bodega=False)),
+        )
+        .order_by('-total', 'seller')
+    )
+    total_ingresado_bodega = devoluciones_qs.filter(ingresado_bodega=True).count()
+    total_pendiente_bodega = total_devoluciones - total_ingresado_bodega
+    seller_bodega_chart = [
+        {
+            'label': seller_labels.get(item['seller'], item['seller']),
+            'total': item['total'],
+            'ingresados': item['ingresados'],
+            'pendientes': item['pendientes'],
+            'ingresados_percent': round((item['ingresados'] / item['total']) * 100) if item['total'] else 0,
+            'pendientes_percent': round((item['pendientes'] / item['total']) * 100) if item['total'] else 0,
+        }
+        for item in seller_bodega_counts
+    ]
     channel_totals = {}
     for devolucion in devoluciones_qs:
         channel = channel_totals.setdefault(
@@ -490,6 +520,10 @@ def dashboard(request):
         'total_devoluciones': total_devoluciones,
         'total_apelaciones': total_apelaciones,
         'total_valor_devoluciones_display': clp_format(total_valor_devoluciones),
+        'seller_count': len(seller_bodega_chart),
+        'seller_bodega_chart': seller_bodega_chart,
+        'total_ingresado_bodega': total_ingresado_bodega,
+        'total_pendiente_bodega': total_pendiente_bodega,
         'apelaciones_pagadas': apelaciones_pagadas,
         'tasa_pago_apelaciones': tasa_pago_apelaciones,
         'total_pagado_apelaciones': total_pagado_apelaciones,

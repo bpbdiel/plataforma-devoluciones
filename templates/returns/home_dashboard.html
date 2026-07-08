@@ -34,6 +34,11 @@
     <div class="executive-note">{{ apelaciones_pagadas }} apelaciones creadas en el periodo</div>
   </div>
   <div class="executive-card">
+    <div class="executive-label">Devoluciones del periodo</div>
+    <div class="executive-value">{{ total_devoluciones }}</div>
+    <div class="executive-note">{{ period_label }}</div>
+  </div>
+  <div class="executive-card">
     <div class="executive-label">Pérdida estimada</div>
     <div class="executive-value" style="color:{% if perdida_estimada_apelaciones > 0 %}var(--red){% else %}var(--green){% endif %}">{{ perdida_estimada_apelaciones_display }}</div>
     <div class="executive-note">Sobre apelaciones pagadas</div>
@@ -43,6 +48,42 @@
     <div class="executive-value">{{ tasa_pago_apelaciones }}%</div>
     <div class="executive-note">Sobre {{ total_apelaciones }} apelaciones creadas</div>
   </div>
+</section>
+
+<section class="chart-card chart-card-wide warehouse-card">
+  <div class="chart-card-header">
+    <div>
+      <div class="chart-title">Seller y estado de bodega</div>
+      <div class="chart-total">{{ seller_count }} seller · {{ total_ingresado_bodega }} ingresadas · {{ total_pendiente_bodega }} pendientes</div>
+    </div>
+    <div class="chart-total">{{ period_label }}</div>
+  </div>
+  {% if seller_bodega_chart %}
+  <div class="warehouse-seller-list">
+    {% for item in seller_bodega_chart %}
+    <div class="warehouse-seller-row">
+      <div class="warehouse-seller-head">
+        <div class="warehouse-seller-name">{{ item.label }}</div>
+        <div class="warehouse-seller-total">{{ item.total }} devoluciones</div>
+      </div>
+      <div class="warehouse-stacked-bar" aria-label="{{ item.ingresados }} ingresadas y {{ item.pendientes }} pendientes">
+        <span class="warehouse-stacked-fill is-entered" style="width:{{ item.ingresados_percent }}%"></span>
+        <span class="warehouse-stacked-fill is-pending" style="width:{{ item.pendientes_percent }}%"></span>
+      </div>
+      <div class="warehouse-seller-metrics">
+        <span><i class="is-entered"></i> Ingresadas: <strong>{{ item.ingresados }}</strong></span>
+        <span><i class="is-pending"></i> Pendientes: <strong>{{ item.pendientes }}</strong></span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon">▦</div>
+    <div class="empty-title">Sin devoluciones por seller</div>
+    <div class="empty-sub">Cuando existan devoluciones en el periodo, aquí verás su estado de ingreso a bodega.</div>
+  </div>
+  {% endif %}
 </section>
 
 <div class="dashboard-grid">

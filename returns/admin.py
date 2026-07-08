@@ -2,14 +2,17 @@ from django.contrib import admin
 from django import forms
 from django.conf import settings
 from django.core.management import call_command
+from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import path
 from django.utils import timezone
+from decimal import Decimal, InvalidOperation
 from io import StringIO
 from pathlib import Path
 import json
 import tempfile
+import unicodedata
 import zipfile
 from .models import Appeal, Product, Return, ReturnPhoto, SiteConfiguration
 
@@ -189,12 +192,119 @@ class ProductImportForm(forms.Form):
         return archivo
 
 
+class ReturnImportForm(forms.Form):
+    archivo = forms.FileField(
+        label='Archivo Excel',
+        help_text='Usa una planilla .xlsx con columnas: numero_orden, seller, sku, ean, producto_nombre, marca, categoria, precio_venta, cantidad, ingresado_bodega, estado, condicion_producto, sub_danos, detalles_dano y notas_internas.',
+    )
+
+    def clean_archivo(self):
+        archivo = self.cleaned_data['archivo']
+        if not archivo.name.lower().endswith('.xlsx'):
+            raise forms.ValidationError('Sube un archivo Excel con extension .xlsx.')
+        return archivo
+
+
+class AppealImportForm(forms.Form):
+    archivo = forms.FileField(
+        label='Archivo Excel',
+        help_text='Usa una planilla .xlsx con columnas: numero_orden, numero_apelacion, detalle, status y estado_cuenta.',
+    )
+
+    def clean_archivo(self):
+        archivo = self.cleaned_data['archivo']
+        if not archivo.name.lower().endswith('.xlsx'):
+            raise forms.ValidationError('Sube un archivo Excel con extension .xlsx.')
+        return archivo
+
+
 def clean_excel_value(value):
     if value is None:
         return ''
     if isinstance(value, float) and value.is_integer():
         return str(int(value))
     return str(value).strip()
+
+
+def normalize_excel_key(value):
+    value = unicodedata.normalize('NFKD', clean_excel_value(value))
+    value = ''.join(char for char in value if not unicodedata.combining(char))
+    return value.lower().replace(' ', '_').replace('-', '_')
+
+
+def build_header_map(headers):
+    return {
+        normalize_excel_key(header): index
+        for index, header in enumerate(headers)
+        if clean_excel_value(header)
+    }
+
+
+def excel_row_value(row, header_map, *names):
+    for name in names:
+        index = header_map.get(normalize_excel_key(name))
+        if index is not None and index < len(row):
+            return clean_excel_value(row[index])
+    return ''
+
+
+def excel_choice_value(value, choices):
+    value = normalize_excel_key(value)
+    if not value:
+        return ''
+    for choice_value, choice_label in choices:
+        if value in {normalize_excel_key(choice_value), normalize_excel_key(choice_label)}:
+            return choice_value
+    return ''
+
+
+def excel_bool_value(value):
+    value = normalize_excel_key(value)
+    return value in {'1', 'si', 'sí', 'true', 'verdadero', 'yes', 'y', 'ingresado', 'ingresada'}
+
+
+def excel_int_value(value, default=1):
+    value = clean_excel_value(value)
+    if not value:
+        return default
+    try:
+        return max(int(float(value)), 1)
+    except (TypeError, ValueError):
+        return default
+
+
+def excel_decimal_value(value):
+    value = clean_excel_value(value)
+    if not value:
+        return None
+    value = value.replace('$', '').replace('CLP', '').replace('clp', '').replace(' ', '')
+    if ',' in value:
+        value = value.replace('.', '').replace(',', '.')
+    try:
+        return Decimal(value)
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def excel_sub_danos_value(value):
+    labels = Return.SUB_DANO_CHOICES
+    values = []
+    raw_items = clean_excel_value(value).replace('|', ',').replace(';', ',').split(',')
+    for item in raw_items:
+        sub_dano = excel_choice_value(item, labels)
+        if sub_dano and sub_dano not in values:
+            values.append(sub_dano)
+    return values
+
+
+def style_excel_header(sheet):
+    from openpyxl.styles import Font, PatternFill
+
+    header_fill = PatternFill(fill_type='solid', fgColor='D9EAF7')
+    for cell in sheet[1]:
+        cell.font = Font(bold=True)
+        cell.fill = header_fill
+    sheet.freeze_panes = 'A2'
 
 
 @admin.register(Product)
@@ -362,11 +472,175 @@ class ReturnPhotoInline(admin.TabularInline):
 
 @admin.register(Return)
 class ReturnAdmin(admin.ModelAdmin):
-    list_display = ['id', 'numero_orden', 'seller_display', 'sku', 'ean', 'producto_nombre', 'marca', 'categoria', 'cantidad', 'precio_venta', 'estado', 'condicion_producto', 'grado', 'fecha_ingreso', 'creado_por']
-    list_filter = ['seller', 'estado', 'condicion_producto', 'grado', 'marca', 'categoria', 'fecha_ingreso']
+    list_display = ['id', 'numero_orden', 'seller_display', 'sku', 'ean', 'producto_nombre', 'marca', 'categoria', 'cantidad', 'precio_venta', 'ingresado_bodega', 'estado', 'condicion_producto', 'grado', 'fecha_ingreso', 'creado_por']
+    list_filter = ['seller', 'ingresado_bodega', 'estado', 'condicion_producto', 'grado', 'marca', 'categoria', 'fecha_ingreso']
     search_fields = ['numero_orden', 'seller', 'sku', 'ean', 'producto_nombre', 'marca', 'categoria']
     inlines = [ReturnPhotoInline]
     readonly_fields = ['estado', 'grado', 'fecha_ingreso', 'fecha_actualizacion', 'creado_por']
+    change_list_template = 'admin/returns/return/change_list.html'
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                'importar-excel/',
+                self.admin_site.admin_view(self.import_excel_view),
+                name='returns_return_import_excel',
+            ),
+            path(
+                'plantilla-excel/',
+                self.admin_site.admin_view(self.download_excel_template_view),
+                name='returns_return_excel_template',
+            ),
+        ]
+        return custom_urls + urls
+
+    def download_excel_template_view(self, request):
+        try:
+            from openpyxl import Workbook
+        except ImportError:
+            self.message_user(request, 'Para descargar la plantilla instala openpyxl: pip install openpyxl', level='ERROR')
+            return redirect('admin:returns_return_changelist')
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = 'Devoluciones'
+        headers = [
+            'numero_orden',
+            'seller',
+            'sku',
+            'ean',
+            'producto_nombre',
+            'marca',
+            'categoria',
+            'precio_venta',
+            'cantidad',
+            'ingresado_bodega',
+            'estado',
+            'condicion_producto',
+            'sub_danos',
+            'detalles_dano',
+            'notas_internas',
+        ]
+        sheet.append(headers)
+        sheet.append([
+            'ORD-2026-001',
+            'falabella',
+            'SKU-12345',
+            '7800000000000',
+            'Nombre del producto',
+            'Marca ejemplo',
+            'Categoria ejemplo',
+            '49990',
+            '1',
+            'si',
+            'recibido',
+            'nuevo',
+            'rayado, sin_accesorios',
+            'Detalle del daño',
+            'Nota interna',
+        ])
+        style_excel_header(sheet)
+        widths = [18, 16, 18, 18, 34, 20, 22, 14, 10, 18, 16, 22, 28, 34, 34]
+        for index, width in enumerate(widths, start=1):
+            sheet.column_dimensions[chr(64 + index)].width = width
+
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = 'attachment; filename="plantilla_devoluciones.xlsx"'
+        workbook.save(response)
+        return response
+
+    def import_excel_view(self, request):
+        if request.method == 'POST':
+            form = ReturnImportForm(request.POST, request.FILES)
+            if form.is_valid():
+                try:
+                    from openpyxl import load_workbook
+                except ImportError:
+                    self.message_user(request, 'Para importar Excel instala openpyxl: pip install openpyxl', level='ERROR')
+                    return redirect('admin:returns_return_changelist')
+
+                workbook = load_workbook(form.cleaned_data['archivo'], read_only=True, data_only=True)
+                sheet = workbook.active
+                rows = sheet.iter_rows(values_only=True)
+                headers = next(rows, None)
+                if not headers:
+                    self.message_user(request, 'El archivo no tiene encabezados.', level='ERROR')
+                    return redirect('admin:returns_return_import_excel')
+
+                header_map = build_header_map(headers)
+                required_headers = {'numero_orden', 'seller', 'sku'}
+                if not required_headers.issubset(header_map):
+                    self.message_user(request, 'El Excel debe incluir las columnas "numero_orden", "seller" y "sku".', level='ERROR')
+                    return redirect('admin:returns_return_import_excel')
+
+                created_count = 0
+                updated_count = 0
+                skipped_count = 0
+                with transaction.atomic():
+                    for row in rows:
+                        numero_orden = excel_row_value(row, header_map, 'numero_orden', 'número_orden', 'orden')
+                        seller = excel_choice_value(excel_row_value(row, header_map, 'seller'), Return.SELLER_CHOICES)
+                        sku = excel_row_value(row, header_map, 'sku')
+                        if not numero_orden or not seller or not sku:
+                            skipped_count += 1
+                            continue
+
+                        product = Product.objects.filter(sku__iexact=sku).first()
+                        ean = excel_row_value(row, header_map, 'ean') or (product.ean if product else '')
+                        producto_nombre = excel_row_value(row, header_map, 'producto_nombre', 'nombre', 'producto') or (product.nombre if product else '')
+                        marca = excel_row_value(row, header_map, 'marca') or (product.marca if product else '')
+                        categoria = excel_row_value(row, header_map, 'categoria', 'categoría') or (product.categoria if product else '')
+                        condicion_producto = excel_choice_value(
+                            excel_row_value(row, header_map, 'condicion_producto', 'estado_producto'),
+                            Return.CONDICION_CHOICES,
+                        ) or 'nuevo'
+                        estado = excel_choice_value(excel_row_value(row, header_map, 'estado'), Return.ESTADO_CHOICES) or 'recibido'
+
+                        devolucion, created = Return.objects.get_or_create(
+                            numero_orden=numero_orden,
+                            defaults={
+                                'seller': seller,
+                                'sku': sku,
+                                'creado_por': request.user,
+                            },
+                        )
+                        devolucion.seller = seller
+                        devolucion.sku = sku
+                        devolucion.ean = ean
+                        devolucion.producto_nombre = producto_nombre
+                        devolucion.marca = marca
+                        devolucion.categoria = categoria
+                        devolucion.precio_venta = excel_decimal_value(excel_row_value(row, header_map, 'precio_venta', 'precio'))
+                        devolucion.cantidad = excel_int_value(excel_row_value(row, header_map, 'cantidad'), default=1)
+                        devolucion.ingresado_bodega = excel_bool_value(excel_row_value(row, header_map, 'ingresado_bodega', 'bodega'))
+                        devolucion.estado = estado
+                        devolucion.condicion_producto = condicion_producto
+                        devolucion.sub_danos = excel_sub_danos_value(excel_row_value(row, header_map, 'sub_danos', 'sub_daños'))
+                        devolucion.detalles_dano = excel_row_value(row, header_map, 'detalles_dano', 'detalles_daño')
+                        devolucion.notas_internas = excel_row_value(row, header_map, 'notas_internas')
+                        devolucion.save()
+
+                        if created:
+                            created_count += 1
+                        else:
+                            updated_count += 1
+
+                workbook.close()
+                self.message_user(request, f'Importación lista: {created_count} creadas, {updated_count} actualizadas, {skipped_count} omitidas.')
+                return redirect('admin:returns_return_changelist')
+        else:
+            form = ReturnImportForm()
+
+        return render(
+            request,
+            'admin/returns/return/import_excel.html',
+            {
+                'form': form,
+                'title': 'Importar devoluciones desde Excel',
+                'opts': self.model._meta,
+            },
+        )
 
     @admin.display(description='Seller', ordering='seller')
     def seller_display(self, obj):
@@ -384,6 +658,122 @@ class AppealAdmin(admin.ModelAdmin):
     list_filter = ['status', 'creado_en']
     search_fields = ['numero_apelacion', 'devolucion__numero_orden', 'devolucion__sku', 'devolucion__producto_nombre', 'estado_cuenta']
     readonly_fields = ['creado_en', 'actualizado_en', 'creado_por', 'actualizado_por']
+    change_list_template = 'admin/returns/appeal/change_list.html'
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                'importar-excel/',
+                self.admin_site.admin_view(self.import_excel_view),
+                name='returns_appeal_import_excel',
+            ),
+            path(
+                'plantilla-excel/',
+                self.admin_site.admin_view(self.download_excel_template_view),
+                name='returns_appeal_excel_template',
+            ),
+        ]
+        return custom_urls + urls
+
+    def download_excel_template_view(self, request):
+        try:
+            from openpyxl import Workbook
+        except ImportError:
+            self.message_user(request, 'Para descargar la plantilla instala openpyxl: pip install openpyxl', level='ERROR')
+            return redirect('admin:returns_appeal_changelist')
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = 'Apelaciones'
+        sheet.append(['numero_orden', 'numero_apelacion', 'detalle', 'status', 'estado_cuenta'])
+        sheet.append(['ORD-2026-001', 'TICKET-001', 'Detalle de la apelacion', 'en_proceso', ''])
+        style_excel_header(sheet)
+        widths = [18, 22, 42, 18, 16]
+        for index, width in enumerate(widths, start=1):
+            sheet.column_dimensions[chr(64 + index)].width = width
+
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = 'attachment; filename="plantilla_apelaciones.xlsx"'
+        workbook.save(response)
+        return response
+
+    def import_excel_view(self, request):
+        if request.method == 'POST':
+            form = AppealImportForm(request.POST, request.FILES)
+            if form.is_valid():
+                try:
+                    from openpyxl import load_workbook
+                except ImportError:
+                    self.message_user(request, 'Para importar Excel instala openpyxl: pip install openpyxl', level='ERROR')
+                    return redirect('admin:returns_appeal_changelist')
+
+                workbook = load_workbook(form.cleaned_data['archivo'], read_only=True, data_only=True)
+                sheet = workbook.active
+                rows = sheet.iter_rows(values_only=True)
+                headers = next(rows, None)
+                if not headers:
+                    self.message_user(request, 'El archivo no tiene encabezados.', level='ERROR')
+                    return redirect('admin:returns_appeal_import_excel')
+
+                header_map = build_header_map(headers)
+                required_headers = {'numero_orden', 'numero_apelacion', 'detalle'}
+                if not required_headers.issubset(header_map):
+                    self.message_user(request, 'El Excel debe incluir las columnas "numero_orden", "numero_apelacion" y "detalle".', level='ERROR')
+                    return redirect('admin:returns_appeal_import_excel')
+
+                created_count = 0
+                updated_count = 0
+                skipped_count = 0
+                with transaction.atomic():
+                    for row in rows:
+                        numero_orden = excel_row_value(row, header_map, 'numero_orden', 'número_orden', 'orden')
+                        numero_apelacion = excel_row_value(row, header_map, 'numero_apelacion', 'número_apelación', 'ticket')
+                        detalle = excel_row_value(row, header_map, 'detalle')
+                        devolucion = Return.objects.filter(numero_orden=numero_orden).first()
+                        if not devolucion or not numero_apelacion or not detalle:
+                            skipped_count += 1
+                            continue
+
+                        status = excel_choice_value(excel_row_value(row, header_map, 'status', 'estado'), Appeal.STATUS_CHOICES) or 'en_proceso'
+                        estado_cuenta = clean_excel_value(excel_row_value(row, header_map, 'estado_cuenta', 'monto', 'monto_pagado')).replace('$', '').replace('.', '').replace(' ', '')
+                        apelacion, created = Appeal.objects.get_or_create(
+                            devolucion=devolucion,
+                            numero_apelacion=numero_apelacion,
+                            defaults={
+                                'detalle': detalle,
+                                'creado_por': request.user,
+                            },
+                        )
+                        apelacion.detalle = detalle
+                        apelacion.status = status
+                        apelacion.estado_cuenta = estado_cuenta
+                        if created:
+                            apelacion.creado_por = request.user
+                        else:
+                            apelacion.actualizado_por = request.user
+                        apelacion.save()
+
+                        if created:
+                            created_count += 1
+                        else:
+                            updated_count += 1
+
+                workbook.close()
+                self.message_user(request, f'Importación lista: {created_count} creadas, {updated_count} actualizadas, {skipped_count} omitidas.')
+                return redirect('admin:returns_appeal_changelist')
+        else:
+            form = AppealImportForm()
+
+        return render(
+            request,
+            'admin/returns/appeal/import_excel.html',
+            {
+                'form': form,
+                'title': 'Importar apelaciones desde Excel',
+                'opts': self.model._meta,
+            },
+        )
 
     @admin.display(description='Orden', ordering='devolucion__numero_orden')
     def orden_display(self, obj):

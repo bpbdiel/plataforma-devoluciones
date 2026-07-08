@@ -95,6 +95,7 @@
       <col class="col-status">
       <col class="col-product-status">
       <col class="col-grade">
+      <col class="col-warehouse">
       <col class="col-appeal">
       <col class="col-photos">
       <col class="col-actions">
@@ -111,6 +112,7 @@
         <th>Estado</th>
         <th>Estado del producto</th>
         <th>Grado</th>
+        <th>Bodega</th>
         <th>Apelación</th>
         <th>Fotos</th>
         <th>Acciones</th>
@@ -144,6 +146,11 @@
         </td>
         <td>
           <span class="badge badge-gray">{{ d.grado }}</span>
+        </td>
+        <td>
+          <span class="badge badge-{% if d.ingresado_bodega %}green{% else %}gray{% endif %}">
+            {% if d.ingresado_bodega %}Ingresado{% else %}Pendiente{% endif %}
+          </span>
         </td>
         <td>
           {% with apelacion=d.apelaciones.first %}

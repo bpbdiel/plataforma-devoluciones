@@ -1,0 +1,41 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Inicio</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url 'admin:returns_appeal_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; Importar Excel
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <form method="post" enctype="multipart/form-data" novalidate>
+    {% csrf_token %}
+    <fieldset class="module aligned">
+      <div class="form-row">
+        {{ form.archivo.errors }}
+        <label for="{{ form.archivo.id_for_label }}">{{ form.archivo.label }}:</label>
+        {{ form.archivo }}
+        {% if form.archivo.help_text %}
+          <div class="help">{{ form.archivo.help_text }}</div>
+        {% endif %}
+      </div>
+    </fieldset>
+
+    <div class="submit-row">
+      <input type="submit" value="Importar apelaciones" class="default">
+      <a href="{% url 'admin:returns_appeal_excel_template' %}" class="button">Descargar plantilla</a>
+      <a href="{% url 'admin:returns_appeal_changelist' %}" class="button cancel-link">Cancelar</a>
+    </div>
+  </form>
+
+  <div class="module" style="margin-top: 20px; padding: 12px 16px;">
+    <h2>Formato esperado</h2>
+    <p>Columnas obligatorias: <strong>numero_orden</strong>, <strong>numero_apelacion</strong> y <strong>detalle</strong>.</p>
+    <p>Columnas opcionales: <strong>status</strong> y <strong>estado_cuenta</strong>.</p>
+    <p>La columna <strong>numero_orden</strong> debe existir previamente como devolucion. Si la apelacion ya existe para esa orden, se actualiza.</p>
+  </div>
+</div>
+{% endblock %}
