@@ -208,7 +208,7 @@ class ReturnImportForm(forms.Form):
 class AppealImportForm(forms.Form):
     archivo = forms.FileField(
         label='Archivo Excel',
-        help_text='Usa una planilla .xlsx con columnas: numero_orden, numero_apelacion, detalle, status y estado_cuenta.',
+        help_text='Usa una planilla .xlsx con columnas: numero_orden, numero_apelacion, detalle, status, monto_apelado y monto_devuelto.',
     )
 
     def clean_archivo(self):
@@ -654,9 +654,9 @@ class ReturnPhotoAdmin(admin.ModelAdmin):
 
 @admin.register(Appeal)
 class AppealAdmin(admin.ModelAdmin):
-    list_display = ['id', 'numero_apelacion', 'orden_display', 'status', 'estado_cuenta', 'creado_en', 'creado_por', 'actualizado_en', 'actualizado_por']
+    list_display = ['id', 'numero_apelacion', 'orden_display', 'status', 'estado_cuenta', 'monto_devuelto', 'creado_en', 'creado_por', 'actualizado_en', 'actualizado_por']
     list_filter = ['status', 'creado_en']
-    search_fields = ['numero_apelacion', 'devolucion__numero_orden', 'devolucion__sku', 'devolucion__producto_nombre', 'estado_cuenta']
+    search_fields = ['numero_apelacion', 'devolucion__numero_orden', 'devolucion__sku', 'devolucion__producto_nombre', 'estado_cuenta', 'monto_devuelto']
     readonly_fields = ['creado_en', 'actualizado_en', 'creado_por', 'actualizado_por']
     change_list_template = 'admin/returns/appeal/change_list.html'
 
@@ -686,10 +686,10 @@ class AppealAdmin(admin.ModelAdmin):
         workbook = Workbook()
         sheet = workbook.active
         sheet.title = 'Apelaciones'
-        sheet.append(['numero_orden', 'numero_apelacion', 'detalle', 'status', 'estado_cuenta'])
-        sheet.append(['ORD-2026-001', 'TICKET-001', 'Detalle de la apelacion', 'en_proceso', ''])
+        sheet.append(['numero_orden', 'numero_apelacion', 'detalle', 'status', 'monto_apelado', 'monto_devuelto'])
+        sheet.append(['ORD-2026-001', 'TICKET-001', 'Detalle de la apelacion', 'en_proceso', '25990', ''])
         style_excel_header(sheet)
-        widths = [18, 22, 42, 18, 16]
+        widths = [18, 22, 42, 18, 16, 16]
         for index, width in enumerate(widths, start=1):
             sheet.column_dimensions[chr(64 + index)].width = width
 
@@ -736,7 +736,8 @@ class AppealAdmin(admin.ModelAdmin):
                             continue
 
                         status = excel_choice_value(excel_row_value(row, header_map, 'status', 'estado'), Appeal.STATUS_CHOICES) or 'en_proceso'
-                        estado_cuenta = clean_excel_value(excel_row_value(row, header_map, 'estado_cuenta', 'monto', 'monto_pagado')).replace('$', '').replace('.', '').replace(' ', '')
+                        estado_cuenta = clean_excel_value(excel_row_value(row, header_map, 'monto_apelado', 'estado_cuenta', 'monto')).replace('$', '').replace('.', '').replace(' ', '')
+                        monto_devuelto = clean_excel_value(excel_row_value(row, header_map, 'monto_devuelto', 'monto_pagado')).replace('$', '').replace('.', '').replace(' ', '')
                         apelacion, created = Appeal.objects.get_or_create(
                             devolucion=devolucion,
                             numero_apelacion=numero_apelacion,
@@ -748,6 +749,7 @@ class AppealAdmin(admin.ModelAdmin):
                         apelacion.detalle = detalle
                         apelacion.status = status
                         apelacion.estado_cuenta = estado_cuenta
+                        apelacion.monto_devuelto = monto_devuelto
                         if created:
                             apelacion.creado_por = request.user
                         else:

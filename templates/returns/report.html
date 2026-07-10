@@ -164,7 +164,7 @@
         <td>
           {% with apelacion=d.apelaciones.first %}
           {% if apelacion and apelacion.diferencia_pagada != None %}
-          <div class="table-product-name" title="Costo total: {{ d.valor_total|clp }} · Pagado: {{ apelacion.estado_cuenta|clp }}">
+          <div class="table-product-name" title="Costo total: {{ d.valor_total|clp }} · Pagado: {{ apelacion.monto_devuelto|clp }}">
             {{ apelacion.diferencia_pagada|clp }}
           </div>
           {% else %}

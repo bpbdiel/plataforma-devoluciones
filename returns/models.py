@@ -253,7 +253,8 @@ class Appeal(models.Model):
     numero_apelacion = models.CharField(max_length=100, verbose_name='N° de apelación o ticket')
     detalle = models.TextField(verbose_name='Detalle')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='en_proceso', verbose_name='Status')
-    estado_cuenta = models.CharField(max_length=200, blank=True, verbose_name='Estado de cuenta')
+    estado_cuenta = models.CharField(max_length=200, blank=True, verbose_name='Monto apelado')
+    monto_devuelto = models.CharField(max_length=200, blank=True, verbose_name='Monto devuelto')
     creado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='apelaciones_creadas')
     actualizado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='apelaciones_actualizadas')
     creado_en = models.DateTimeField(auto_now_add=True)
@@ -278,10 +279,10 @@ class Appeal(models.Model):
 
     @property
     def monto_pagado(self):
-        if not self.estado_cuenta:
+        if not self.monto_devuelto:
             return None
         try:
-            return Decimal(str(self.estado_cuenta))
+            return Decimal(str(self.monto_devuelto))
         except InvalidOperation:
             return None
 

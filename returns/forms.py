@@ -216,7 +216,7 @@ class AppealForm(forms.ModelForm):
             'numero_apelacion': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'N° de apelación o ticket'}),
             'detalle': forms.Textarea(attrs={'class': 'form-textarea', 'rows': 5, 'placeholder': 'Detalle del seguimiento de la apelación...'}),
             'status': forms.Select(attrs={'class': 'form-select'}),
-            'estado_cuenta': forms.NumberInput(attrs={'class': 'form-input', 'placeholder': 'Monto en $ CLP', 'min': '0', 'step': '1'}),
+            'estado_cuenta': forms.NumberInput(attrs={'class': 'form-input', 'placeholder': 'Monto apelado en $ CLP', 'min': '0', 'step': '1'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -231,6 +231,7 @@ class AppealForm(forms.ModelForm):
             self.fields['status'].choices = [('en_proceso', 'En proceso')]
             self.fields['status'].initial = 'en_proceso'
             self.fields['status'].disabled = True
+            self.fields['estado_cuenta'].required = True
         self.fields['devolucion'].queryset = devoluciones_disponibles.order_by('-fecha_ingreso', '-id')
         self.fields['devolucion'].label_from_instance = self.label_devolucion
 

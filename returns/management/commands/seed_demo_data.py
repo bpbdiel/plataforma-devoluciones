@@ -159,6 +159,7 @@ class Command(BaseCommand):
                     'detalle': rng.choice(appeal_details),
                     'status': status,
                     'estado_cuenta': monto,
+                    'monto_devuelto': monto if status == 'pagado' else '',
                     'creado_por': user,
                     'actualizado_por': user,
                 },

@@ -88,7 +88,8 @@ def filtered_report_returns(request):
             Q(categoria__icontains=q) |
             Q(apelaciones__numero_apelacion__icontains=q) |
             Q(apelaciones__detalle__icontains=q) |
-            Q(apelaciones__estado_cuenta__icontains=q)
+            Q(apelaciones__estado_cuenta__icontains=q) |
+            Q(apelaciones__monto_devuelto__icontains=q)
         )
     if start_date:
         devoluciones = devoluciones.filter(fecha_ingreso__gte=start_date)
@@ -201,7 +202,7 @@ def report_export_response(devoluciones):
                 apelacion.numero_apelacion if apelacion else '',
                 apelacion.detalle if apelacion else '',
                 apelacion.get_status_display() if apelacion else '',
-                apelacion.estado_cuenta if apelacion and apelacion.status == 'pagado' else '',
+                apelacion.monto_devuelto if apelacion and apelacion.status == 'pagado' else '',
                 int(diferencia) if diferencia is not None else '',
                 apelacion.creado_por.username if apelacion and apelacion.creado_por else '',
                 apelacion.actualizado_por.username if apelacion and apelacion.actualizado_por else '',
@@ -376,12 +377,12 @@ def dashboard(request):
     apelaciones_pagadas = status_counts.get('pagado', 0)
     tasa_pago_apelaciones = round((apelaciones_pagadas / total_apelaciones) * 100) if total_apelaciones else 0
     total_pagado_apelaciones = sum(
-        int(apelacion.estado_cuenta)
-        for apelacion in apelaciones_qs.filter(status='pagado').only('estado_cuenta')
-        if apelacion.estado_cuenta and apelacion.estado_cuenta.isdigit()
+        int(apelacion.monto_devuelto)
+        for apelacion in apelaciones_qs.filter(status='pagado').only('monto_devuelto')
+        if apelacion.monto_devuelto and apelacion.monto_devuelto.isdigit()
     )
     costo_devoluciones_pagadas = 0
-    for apelacion in apelaciones_qs.filter(status='pagado').select_related('devolucion').only('estado_cuenta', 'devolucion__precio_venta', 'devolucion__cantidad'):
+    for apelacion in apelaciones_qs.filter(status='pagado').select_related('devolucion').only('monto_devuelto', 'devolucion__precio_venta', 'devolucion__cantidad'):
         if apelacion.monto_pagado is not None and apelacion.devolucion.valor_total is not None:
             costo_devoluciones_pagadas += int(apelacion.devolucion.valor_total)
     perdida_estimada_apelaciones = max(costo_devoluciones_pagadas - total_pagado_apelaciones, 0)
@@ -470,8 +471,8 @@ def dashboard(request):
         if devolucion.precio_venta is not None:
             channel['cost'] += devolucion.precio_venta * devolucion.cantidad
 
-    for apelacion in apelaciones_qs.filter(status='pagado').select_related('devolucion').only('estado_cuenta', 'devolucion__seller'):
-        if not (apelacion.estado_cuenta and apelacion.estado_cuenta.isdigit()):
+    for apelacion in apelaciones_qs.filter(status='pagado').select_related('devolucion').only('monto_devuelto', 'devolucion__seller'):
+        if not (apelacion.monto_devuelto and apelacion.monto_devuelto.isdigit()):
             continue
         channel = channel_totals.setdefault(
             apelacion.devolucion.seller,
@@ -481,7 +482,7 @@ def dashboard(request):
                 'returned': 0,
             },
         )
-        channel['returned'] += int(apelacion.estado_cuenta)
+        channel['returned'] += int(apelacion.monto_devuelto)
 
     max_channel_amount = max(
         (max(item['cost'], item['returned']) for item in channel_totals.values()),
@@ -611,7 +612,8 @@ def appeals_dashboard(request):
             Q(devolucion__numero_orden__icontains=q) |
             Q(devolucion__sku__icontains=q) |
             Q(devolucion__producto_nombre__icontains=q) |
-            Q(estado_cuenta__icontains=q)
+            Q(estado_cuenta__icontains=q) |
+            Q(monto_devuelto__icontains=q)
         )
         devoluciones_sin_apelacion = devoluciones_sin_apelacion.filter(
             Q(numero_orden__icontains=q) |
@@ -630,7 +632,7 @@ def appeals_dashboard(request):
 
     costo_devoluciones_con_pago = 0
     total_pagado_apelaciones = 0
-    for apelacion in apelaciones.filter(status='pagado').select_related('devolucion').exclude(estado_cuenta=''):
+    for apelacion in apelaciones.filter(status='pagado').select_related('devolucion').exclude(monto_devuelto=''):
         if apelacion.monto_pagado is None or apelacion.devolucion.valor_total is None:
             continue
         costo_devoluciones_con_pago += int(apelacion.devolucion.valor_total)
@@ -699,9 +701,9 @@ def report_dashboard(request):
     total_pagado = 0
     for devolucion in devoluciones:
         for apelacion in devolucion.apelaciones.all():
-            if apelacion.estado_cuenta and apelacion.estado_cuenta.isdigit():
+            if apelacion.monto_devuelto and apelacion.monto_devuelto.isdigit():
                 if apelacion.status == 'pagado':
-                    total_pagado += int(apelacion.estado_cuenta)
+                    total_pagado += int(apelacion.monto_devuelto)
 
     devoluciones_page = paginate_queryset(request, devoluciones, 'page', 15)
     context = {
@@ -824,20 +826,20 @@ def appeal_update_status(request, pk):
         status = request.POST.get('status')
         valid_statuses = dict(Appeal.STATUS_CHOICES)
         if status in valid_statuses:
-            estado_cuenta = request.POST.get('estado_cuenta', '').strip().replace('$', '').replace('.', '').replace(' ', '')
-            if status == 'proceso_pago' and not estado_cuenta:
-                messages.error(request, 'Ingresa el monto de la apelación en $ CLP para pasar a proceso de pago.')
+            monto_devuelto = request.POST.get('monto_devuelto', '').strip().replace('$', '').replace('.', '').replace(' ', '')
+            if status == 'pagado' and not monto_devuelto:
+                messages.error(request, 'Ingresa el monto efectivamente devuelto en $ CLP para marcar la apelación como pagada.')
                 return redirect('appeal_detail', pk=apelacion.pk)
-            if estado_cuenta and not estado_cuenta.isdigit():
+            if monto_devuelto and not monto_devuelto.isdigit():
                 messages.error(request, 'Ingresa un monto válido en pesos chilenos.')
                 return redirect('appeal_detail', pk=apelacion.pk)
 
             apelacion.status = status
             apelacion.actualizado_por = request.user
             update_fields = ['status', 'actualizado_por', 'actualizado_en']
-            if estado_cuenta:
-                apelacion.estado_cuenta = estado_cuenta
-                update_fields.append('estado_cuenta')
+            if status == 'pagado':
+                apelacion.monto_devuelto = monto_devuelto
+                update_fields.append('monto_devuelto')
             apelacion.save(update_fields=update_fields)
             messages.success(request, f'Apelación actualizada a {valid_statuses[status]}.')
         else:

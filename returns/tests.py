@@ -408,6 +408,13 @@ class AppealFormTests(TestCase):
 
         self.assertEqual(apelacion.devolucion, self.devolucion)
         self.assertEqual(apelacion.status, 'en_proceso')
+        self.assertEqual(apelacion.estado_cuenta, '25990')
+
+    def test_new_appeal_requires_appealed_amount(self):
+        form = AppealForm(data=self.form_data(estado_cuenta=''))
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('estado_cuenta', form.errors)
 
     def test_returns_with_appeal_are_not_available_to_create(self):
         Appeal.objects.create(
@@ -450,14 +457,18 @@ class AppealFormTests(TestCase):
         )
         self.client.force_login(self.user)
 
-        response = self.client.post(reverse('appeal_update_status', args=[apelacion.pk]), {'status': 'pagado'})
+        response = self.client.post(reverse('appeal_update_status', args=[apelacion.pk]), {
+            'status': 'pagado',
+            'monto_devuelto': '21990',
+        })
         apelacion.refresh_from_db()
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(apelacion.status, 'pagado')
+        self.assertEqual(apelacion.monto_devuelto, '21990')
         self.assertEqual(apelacion.actualizado_por, self.user)
 
-    def test_payment_process_requires_amount(self):
+    def test_paid_status_requires_returned_amount(self):
         apelacion = Appeal.objects.create(
             devolucion=self.devolucion,
             numero_apelacion='TICKET-AMOUNT',
@@ -465,28 +476,30 @@ class AppealFormTests(TestCase):
         )
         self.client.force_login(self.user)
 
-        self.client.post(reverse('appeal_update_status', args=[apelacion.pk]), {'status': 'proceso_pago'})
+        self.client.post(reverse('appeal_update_status', args=[apelacion.pk]), {'status': 'pagado'})
         apelacion.refresh_from_db()
 
         self.assertEqual(apelacion.status, 'en_proceso')
-        self.assertEqual(apelacion.estado_cuenta, '')
+        self.assertEqual(apelacion.monto_devuelto, '')
 
-    def test_payment_process_saves_clp_amount(self):
+    def test_paid_status_saves_returned_amount_without_changing_appealed_amount(self):
         apelacion = Appeal.objects.create(
             devolucion=self.devolucion,
             numero_apelacion='TICKET-AMOUNT-OK',
             detalle='Proceso de pago.',
+            estado_cuenta='30000',
         )
         self.client.force_login(self.user)
 
         self.client.post(reverse('appeal_update_status', args=[apelacion.pk]), {
-            'status': 'proceso_pago',
-            'estado_cuenta': '25990',
+            'status': 'pagado',
+            'monto_devuelto': '25990',
         })
         apelacion.refresh_from_db()
 
-        self.assertEqual(apelacion.status, 'proceso_pago')
-        self.assertEqual(apelacion.estado_cuenta, '25990')
+        self.assertEqual(apelacion.status, 'pagado')
+        self.assertEqual(apelacion.estado_cuenta, '30000')
+        self.assertEqual(apelacion.monto_devuelto, '25990')
 
     def test_paid_difference_uses_total_return_value(self):
         self.devolucion.precio_venta = '10000'
@@ -497,7 +510,8 @@ class AppealFormTests(TestCase):
             numero_apelacion='TICKET-DIFF',
             detalle='Pago parcial.',
             status='pagado',
-            estado_cuenta='25000',
+            estado_cuenta='30000',
+            monto_devuelto='25000',
         )
 
         self.assertEqual(apelacion.devolucion.valor_total, 30000)

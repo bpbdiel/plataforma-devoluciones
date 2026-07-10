@@ -135,15 +135,15 @@
           <span class="badge badge-{{ a.get_status_color }}">{{ a.get_status_display }}</span>
         </td>
         <td>
-          {% if a.status == 'pagado' and a.estado_cuenta %}
-          <div class="table-product-name" title="{{ a.estado_cuenta|clp }}">{{ a.estado_cuenta|clp }}</div>
+          {% if a.status == 'pagado' and a.monto_devuelto %}
+          <div class="table-product-name" title="{{ a.monto_devuelto|clp }}">{{ a.monto_devuelto|clp }}</div>
           {% else %}
           <span style="color:var(--text-muted)">—</span>
           {% endif %}
         </td>
         <td>
           {% if a.diferencia_pagada != None %}
-          <div class="table-product-name" title="Costo total: {{ a.devolucion.valor_total|clp }} · Pagado: {{ a.estado_cuenta|clp }}">
+          <div class="table-product-name" title="Costo total: {{ a.devolucion.valor_total|clp }} · Pagado: {{ a.monto_devuelto|clp }}">
             {{ a.diferencia_pagada|clp }}
           </div>
           {% else %}

@@ -15,8 +15,8 @@
       <span class="badge badge-{{ apelacion.get_status_color }}" style="font-size:13px;padding:5px 14px">
         {{ apelacion.get_status_display }}
       </span>
-      {% if apelacion.status == 'pagado' and apelacion.estado_cuenta %}
-      <span style="color:var(--text-muted);font-size:13px">{{ apelacion.estado_cuenta|clp }}</span>
+      {% if apelacion.status == 'pagado' and apelacion.monto_devuelto %}
+      <span style="color:var(--text-muted);font-size:13px">{{ apelacion.monto_devuelto|clp }}</span>
       {% endif %}
     </div>
 
@@ -42,10 +42,14 @@
         <span class="detail-key">Actualizada por</span>
         <span class="detail-val">{% if apelacion.actualizado_por %}{{ apelacion.actualizado_por.username }}{% else %}—{% endif %}</span>
       </div>
-      {% if apelacion.status == 'pagado' and apelacion.estado_cuenta %}
       <div class="detail-row">
-        <span class="detail-key">Monto apelación</span>
+        <span class="detail-key">Monto apelado</span>
         <span class="detail-val">{{ apelacion.estado_cuenta|clp }}</span>
+      </div>
+      {% if apelacion.status == 'pagado' and apelacion.monto_devuelto %}
+      <div class="detail-row">
+        <span class="detail-key">Monto devuelto</span>
+        <span class="detail-val">{{ apelacion.monto_devuelto|clp }}</span>
       </div>
       <div class="detail-row">
         <span class="detail-key">Costo devolución</span>
@@ -69,7 +73,6 @@
         <form method="post" action="{% url 'appeal_update_status' apelacion.pk %}" class="process-action-form">
           {% csrf_token %}
           <input type="hidden" name="status" value="rechazado">
-          <div class="process-action-amount" aria-hidden="true"></div>
           <button type="submit" class="btn btn-danger process-action-btn" {% if apelacion.status == 'rechazado' %}disabled{% endif %}>
             Rechazado
           </button>
@@ -77,18 +80,20 @@
         <form method="post" action="{% url 'appeal_update_status' apelacion.pk %}" class="process-action-form">
           {% csrf_token %}
           <input type="hidden" name="status" value="proceso_pago">
-          <input type="number" name="estado_cuenta" class="form-input process-action-amount" min="0" step="1" placeholder="Monto $ CLP" value="{{ apelacion.estado_cuenta }}">
           <button type="submit" class="btn btn-purple process-action-btn" {% if apelacion.status == 'proceso_pago' %}disabled{% endif %}>
             Proceso de pago
           </button>
         </form>
-        <form method="post" action="{% url 'appeal_update_status' apelacion.pk %}" class="process-action-form">
+        <form method="post" action="{% url 'appeal_update_status' apelacion.pk %}" class="process-action-form process-action-paid">
           {% csrf_token %}
           <input type="hidden" name="status" value="pagado">
-          <div class="process-action-amount" aria-hidden="true"></div>
-          <button type="submit" class="btn btn-green process-action-btn" {% if apelacion.status == 'pagado' %}disabled{% endif %}>
-            Pagado
-          </button>
+          <label for="monto-devuelto">Monto efectivamente devuelto ($ CLP)</label>
+          <div class="process-paid-row">
+            <input id="monto-devuelto" type="number" name="monto_devuelto" class="form-input process-action-amount" min="0" step="1" placeholder="Monto pagado $ CLP" value="{{ apelacion.monto_devuelto }}" required>
+            <button type="submit" class="btn btn-green process-action-btn" {% if apelacion.status == 'pagado' %}disabled{% endif %}>
+              Confirmar pago
+            </button>
+          </div>
         </form>
       </div>
     </div>

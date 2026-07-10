@@ -131,10 +131,10 @@
         <span class="detail-key">Ticket</span>
         <span class="detail-val">{{ apelacion.numero_apelacion }}</span>
       </div>
-      {% if apelacion.status == 'pagado' and apelacion.estado_cuenta %}
+      {% if apelacion.status == 'pagado' and apelacion.monto_devuelto %}
       <div class="detail-row">
-        <span class="detail-key">Monto apelación</span>
-        <span class="detail-val">${{ apelacion.estado_cuenta }} CLP</span>
+        <span class="detail-key">Monto devuelto</span>
+        <span class="detail-val">{{ apelacion.monto_devuelto|clp }}</span>
       </div>
       {% endif %}
       <div style="margin-top:12px">
