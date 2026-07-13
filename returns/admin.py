@@ -8,6 +8,7 @@ from django.shortcuts import redirect, render
 from django.urls import path
 from django.utils import timezone
 from decimal import Decimal, InvalidOperation
+from datetime import date, datetime, time
 from io import StringIO
 from pathlib import Path
 import json
@@ -195,7 +196,7 @@ class ProductImportForm(forms.Form):
 class ReturnImportForm(forms.Form):
     archivo = forms.FileField(
         label='Archivo Excel',
-        help_text='Usa una planilla .xlsx con columnas: numero_orden, seller, sku, ean, producto_nombre, marca, categoria, precio_venta, cantidad, ingresado_bodega, estado, condicion_producto, sub_danos, detalles_dano y notas_internas.',
+        help_text='Usa una planilla .xlsx con columnas: numero_orden, fecha_ingreso, seller, sku, ean, producto_nombre, marca, categoria, precio_venta, cantidad, ingresado_bodega, estado, condicion_producto, sub_danos, detalles_dano y notas_internas.',
     )
 
     def clean_archivo(self):
@@ -208,7 +209,7 @@ class ReturnImportForm(forms.Form):
 class AppealImportForm(forms.Form):
     archivo = forms.FileField(
         label='Archivo Excel',
-        help_text='Usa una planilla .xlsx con columnas: numero_orden, numero_apelacion, detalle, status, monto_apelado y monto_devuelto.',
+        help_text='Usa una planilla .xlsx con columnas: numero_orden, numero_apelacion, fecha_apelacion, detalle, status, monto_apelado y monto_devuelto.',
     )
 
     def clean_archivo(self):
@@ -246,6 +247,47 @@ def excel_row_value(row, header_map, *names):
         if index is not None and index < len(row):
             return clean_excel_value(row[index])
     return ''
+
+
+def excel_raw_value(row, header_map, *names):
+    for name in names:
+        index = header_map.get(normalize_excel_key(name))
+        if index is not None and index < len(row):
+            return row[index]
+    return None
+
+
+def excel_date_value(value):
+    if value in (None, ''):
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+
+    raw_value = clean_excel_value(value)
+    for date_format in ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y', '%Y/%m/%d'):
+        try:
+            return datetime.strptime(raw_value, date_format).date()
+        except ValueError:
+            continue
+    return None
+
+
+def excel_datetime_value(value):
+    if value in (None, ''):
+        return None
+    if isinstance(value, datetime):
+        parsed_value = value
+    else:
+        parsed_date = excel_date_value(value)
+        if parsed_date is None:
+            return None
+        parsed_value = datetime.combine(parsed_date, time.min)
+
+    if timezone.is_naive(parsed_value):
+        return timezone.make_aware(parsed_value, timezone.get_current_timezone())
+    return parsed_value
 
 
 def excel_choice_value(value, choices):
@@ -507,6 +549,7 @@ class ReturnAdmin(admin.ModelAdmin):
         sheet.title = 'Devoluciones'
         headers = [
             'numero_orden',
+            'fecha_ingreso',
             'seller',
             'sku',
             'ean',
@@ -525,6 +568,7 @@ class ReturnAdmin(admin.ModelAdmin):
         sheet.append(headers)
         sheet.append([
             'ORD-2026-001',
+            '13/07/2026',
             'falabella',
             'SKU-12345',
             '7800000000000',
@@ -541,7 +585,7 @@ class ReturnAdmin(admin.ModelAdmin):
             'Nota interna',
         ])
         style_excel_header(sheet)
-        widths = [18, 16, 18, 18, 34, 20, 22, 14, 10, 18, 16, 22, 28, 34, 34]
+        widths = [18, 16, 16, 18, 18, 34, 20, 22, 14, 10, 18, 16, 22, 28, 34, 34]
         for index, width in enumerate(widths, start=1):
             sheet.column_dimensions[chr(64 + index)].width = width
 
@@ -582,7 +626,9 @@ class ReturnAdmin(admin.ModelAdmin):
                         numero_orden = excel_row_value(row, header_map, 'numero_orden', 'número_orden', 'orden')
                         seller = excel_choice_value(excel_row_value(row, header_map, 'seller'), Return.SELLER_CHOICES)
                         sku = excel_row_value(row, header_map, 'sku')
-                        if not numero_orden or not seller or not sku:
+                        fecha_ingreso_raw = excel_raw_value(row, header_map, 'fecha_ingreso', 'fecha')
+                        fecha_ingreso = excel_date_value(fecha_ingreso_raw)
+                        if not numero_orden or not seller or not sku or (clean_excel_value(fecha_ingreso_raw) and fecha_ingreso is None):
                             skipped_count += 1
                             continue
 
@@ -620,6 +666,8 @@ class ReturnAdmin(admin.ModelAdmin):
                         devolucion.detalles_dano = excel_row_value(row, header_map, 'detalles_dano', 'detalles_daño')
                         devolucion.notas_internas = excel_row_value(row, header_map, 'notas_internas')
                         devolucion.save()
+                        if fecha_ingreso is not None:
+                            Return.objects.filter(pk=devolucion.pk).update(fecha_ingreso=fecha_ingreso)
 
                         if created:
                             created_count += 1
@@ -686,10 +734,10 @@ class AppealAdmin(admin.ModelAdmin):
         workbook = Workbook()
         sheet = workbook.active
         sheet.title = 'Apelaciones'
-        sheet.append(['numero_orden', 'numero_apelacion', 'detalle', 'status', 'monto_apelado', 'monto_devuelto'])
-        sheet.append(['ORD-2026-001', 'TICKET-001', 'Detalle de la apelacion', 'en_proceso', '25990', ''])
+        sheet.append(['numero_orden', 'numero_apelacion', 'fecha_apelacion', 'detalle', 'status', 'monto_apelado', 'monto_devuelto'])
+        sheet.append(['ORD-2026-001', 'TICKET-001', '13/07/2026', 'Detalle de la apelacion', 'en_proceso', '25990', ''])
         style_excel_header(sheet)
-        widths = [18, 22, 42, 18, 16, 16]
+        widths = [18, 22, 18, 42, 18, 16, 16]
         for index, width in enumerate(widths, start=1):
             sheet.column_dimensions[chr(64 + index)].width = width
 
@@ -730,8 +778,10 @@ class AppealAdmin(admin.ModelAdmin):
                         numero_orden = excel_row_value(row, header_map, 'numero_orden', 'número_orden', 'orden')
                         numero_apelacion = excel_row_value(row, header_map, 'numero_apelacion', 'número_apelación', 'ticket')
                         detalle = excel_row_value(row, header_map, 'detalle')
+                        fecha_apelacion_raw = excel_raw_value(row, header_map, 'fecha_apelacion', 'creado_en', 'fecha_creacion', 'fecha')
+                        fecha_apelacion = excel_datetime_value(fecha_apelacion_raw)
                         devolucion = Return.objects.filter(numero_orden=numero_orden).first()
-                        if not devolucion or not numero_apelacion or not detalle:
+                        if not devolucion or not numero_apelacion or not detalle or (clean_excel_value(fecha_apelacion_raw) and fecha_apelacion is None):
                             skipped_count += 1
                             continue
 
@@ -755,6 +805,8 @@ class AppealAdmin(admin.ModelAdmin):
                         else:
                             apelacion.actualizado_por = request.user
                         apelacion.save()
+                        if fecha_apelacion is not None:
+                            Appeal.objects.filter(pk=apelacion.pk).update(creado_en=fecha_apelacion)
 
                         if created:
                             created_count += 1

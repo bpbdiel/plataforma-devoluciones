@@ -1,11 +1,13 @@
 import shutil
 import tempfile
+from datetime import date, datetime
 from io import BytesIO
 
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from .forms import AppealForm, ReturnForm
 from .models import Appeal, Product, Return, ReturnPhoto
@@ -225,6 +227,12 @@ class AdminExcelImportTests(TestCase):
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         )
 
+    def test_admin_return_and_appeal_lists_are_accessible(self):
+        for url_name in ('admin:returns_return_changelist', 'admin:returns_appeal_changelist'):
+            with self.subTest(url_name=url_name):
+                response = self.client.get(reverse(url_name))
+                self.assertEqual(response.status_code, 200)
+
     def test_admin_imports_returns_from_excel(self):
         Product.objects.create(
             sku='SKU-IMPORT-001',
@@ -234,8 +242,8 @@ class AdminExcelImportTests(TestCase):
             categoria='Categoria importada',
         )
         archivo = self.excel_file('devoluciones.xlsx', [
-            ['numero_orden', 'seller', 'sku', 'precio_venta', 'cantidad', 'ingresado_bodega', 'condicion_producto'],
-            ['ORD-IMPORT-001', 'Falabella', 'SKU-IMPORT-001', '29990', '2', 'si', 'Caja Dañada'],
+            ['numero_orden', 'fecha_ingreso', 'seller', 'sku', 'precio_venta', 'cantidad', 'ingresado_bodega', 'condicion_producto'],
+            ['ORD-IMPORT-001', '15/06/2026', 'Falabella', 'SKU-IMPORT-001', '29990', '2', 'si', 'Caja Dañada'],
         ])
 
         response = self.client.post(reverse('admin:returns_return_import_excel'), {'archivo': archivo})
@@ -249,6 +257,7 @@ class AdminExcelImportTests(TestCase):
         self.assertTrue(devolucion.ingresado_bodega)
         self.assertEqual(devolucion.condicion_producto, 'caja_danada')
         self.assertEqual(devolucion.grado, 'C')
+        self.assertEqual(devolucion.fecha_ingreso, date(2026, 6, 15))
 
     def test_admin_imports_appeals_from_excel(self):
         devolucion = Return.objects.create(
@@ -258,8 +267,8 @@ class AdminExcelImportTests(TestCase):
             producto_nombre='Producto con apelacion',
         )
         archivo = self.excel_file('apelaciones.xlsx', [
-            ['numero_orden', 'numero_apelacion', 'detalle', 'status', 'estado_cuenta'],
-            ['ORD-APPEAL-IMPORT', 'TICKET-IMPORT-001', 'Detalle importado', 'Pagado', '15990'],
+            ['numero_orden', 'numero_apelacion', 'fecha_apelacion', 'detalle', 'status', 'estado_cuenta'],
+            ['ORD-APPEAL-IMPORT', 'TICKET-IMPORT-001', date(2026, 6, 20), 'Detalle importado', 'Pagado', '15990'],
         ])
 
         response = self.client.post(reverse('admin:returns_appeal_import_excel'), {'archivo': archivo})
@@ -270,6 +279,36 @@ class AdminExcelImportTests(TestCase):
         self.assertEqual(apelacion.status, 'pagado')
         self.assertEqual(apelacion.estado_cuenta, '15990')
         self.assertEqual(apelacion.creado_por, self.user)
+        self.assertEqual(timezone.localdate(apelacion.creado_en), date(2026, 6, 20))
+
+    def test_main_dashboard_can_show_all_imported_history(self):
+        devolucion = Return.objects.create(
+            seller='falabella',
+            numero_orden='ORD-HISTORICA-001',
+            sku='SKU-HISTORICO-001',
+            producto_nombre='Producto histórico',
+            precio_venta='49990',
+            creado_por=self.user,
+        )
+        Return.objects.filter(pk=devolucion.pk).update(fecha_ingreso=date(2024, 1, 1))
+        apelacion = Appeal.objects.create(
+            devolucion=devolucion,
+            numero_apelacion='TICKET-HISTORICO-001',
+            detalle='Apelación histórica',
+            status='pagado',
+            monto_devuelto='40000',
+            creado_por=self.user,
+        )
+        Appeal.objects.filter(pk=apelacion.pk).update(
+            creado_en=timezone.make_aware(datetime(2024, 1, 1)),
+        )
+
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['period_label'], 'Todo el historial')
+        self.assertEqual(response.context['total_devoluciones'], 1)
+        self.assertEqual(response.context['total_apelaciones'], 1)
 
 
 @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)

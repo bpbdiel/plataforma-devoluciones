@@ -29,7 +29,7 @@ def querystring_without(request, *keys):
 
 def period_dates(request):
     today = timezone.localdate()
-    period = request.GET.get('period', 'month')
+    period = request.GET.get('period', 'all')
 
     if period == 'all':
         return '', None, None
@@ -299,11 +299,15 @@ def product_lookup_by_ean(request):
 @login_required
 def dashboard(request):
     today = timezone.localdate()
-    period = request.GET.get('period', 'month')
+    period = request.GET.get('period', 'all')
     fecha_desde = request.GET.get('fecha_desde', '')
     fecha_hasta = request.GET.get('fecha_hasta', '')
 
-    if period == 'today':
+    if period == 'all':
+        start_date = None
+        end_date = None
+        period_label = 'Todo el historial'
+    elif period == 'today':
         start_date = today
         end_date = today
         period_label = 'Hoy'

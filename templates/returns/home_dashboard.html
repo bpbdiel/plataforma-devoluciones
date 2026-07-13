@@ -9,6 +9,7 @@
     <div class="chart-total">{{ period_label }}</div>
   </div>
   <div class="dashboard-period-actions">
+    <a href="{% url 'dashboard' %}?period=all" class="btn btn-sm {% if period == 'all' %}btn-primary{% else %}btn-ghost{% endif %}">Todo</a>
     <a href="{% url 'dashboard' %}?period=year" class="btn btn-sm {% if period == 'year' %}btn-primary{% else %}btn-ghost{% endif %}">Año actual</a>
     <a href="{% url 'dashboard' %}?period=month" class="btn btn-sm {% if period == 'month' %}btn-primary{% else %}btn-ghost{% endif %}">Mes actual</a>
     <a href="{% url 'dashboard' %}?period=week" class="btn btn-sm {% if period == 'week' %}btn-primary{% else %}btn-ghost{% endif %}">Esta semana</a>
